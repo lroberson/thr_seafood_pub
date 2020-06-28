@@ -1,0 +1,71 @@
+mythreats_codes,my_threats_detail,n_spp,threatslookup_value
+1,Fishing_ind_target,65,5.4.2 Intentional use: (large scale) [harvest]
+1,Fishing_ind_target,65,101.4 OLD 3.1.3 Harvesting (hunting/gathering)->Food->Regional/international trade
+1,Fishing_ind_target,65,101.16 OLD 3.4.3 Harvesting (hunting/gathering)->Materials->Regional/international trade
+1,Fishing_ind_target,65,5.3.2 Intentional use: (large scale) [harvest]
+2,Fishing_ind_bycatch,50,5.4.4 Unintentional effects: (large scale) [harvest]
+3,Fishing_ss_target,61,5.4.1 Intentional use: (subsistence/small scale) [harvest]
+3,Fishing_ss_target,61,101.2 OLD 3.1.1 Harvesting (hunting/gathering)->Food->Subsistence use/local trade
+3,Fishing_ss_target,61,101.3 OLD 3.1.2 Harvesting (hunting/gathering)->Food->Sub-national/national trade
+4,Fishing_ss_bycatch,44,5.4.3 Unintentional effects: (subsistence/small scale) [harvest]
+5,Fishing_unspecified,5,101.17 OLD 3.5 Harvesting (hunting/gathering)->Cultural/scientific/leisure activities
+5,Fishing_unspecified,5,101.1 OLD 3.1 Harvesting (hunting/gathering)->Food
+5,Fishing_unspecified,5,5.1.1 Intentional use (species is the target)
+6,Other anthropogenic,36,5.4.5 Persecution/control
+6,Unknown,36,9.3.4 Type Unknown/Unrecorded
+6,Other anthropogenic,36,6.1 Recreational activities
+6,Other anthropogenic,36,9.1.1 Sewage
+6,Unknown,36,9.1.3 Type Unknown/Unrecorded
+6,Other environmental/climate,36,8.1.2 Named species
+6,Intrinsic,36,101.35 OLD 9.5 Intrinsic factors->Low densities
+6,Intrinsic,36,101.32 OLD 9.2 Intrinsic factors->Poor recruitment/reproduction/regeneration
+6,Other anthropogenic,36,3.1 Oil & gas drilling
+6,Other anthropogenic,36,4.3 Shipping lanes
+6,Other anthropogenic,36,7.2.10 Large dams
+6,Other environmental/climate,36,8.2 Problematic native species/diseases
+6,Other anthropogenic,36,7.2.9 Small dams
+6,Unknown,36,9.2.3 Type Unknown/Unrecorded
+6,Other anthropogenic,36,100.18 OLD 4.1.1 Accidental mortality->Bycatch->Fisheries related
+6,Intrinsic,36,101.37 OLD 9.7 Intrinsic factors->Slow growth rates
+6,Other anthropogenic,36,101.13 OLD 3.4 Harvesting (hunting/gathering)->Materials
+6,Other anthropogenic,36,1.1 Housing & urban areas
+6,Other anthropogenic,36,7.2.11 Dams (size unknown)
+6,Other environmental/climate,36,8.1.1 Unspecified species
+6,Unknown,36,12.1 Other threat
+6,Other anthropogenic,36,3.2 Mining & quarrying
+6,Other anthropogenic,36,9.2.1 Oil spills
+6,Other anthropogenic,36,11.1 Habitat shifting & alteration
+6,Other environmental/climate,36,11.3 Temperature extremes
+6,Other anthropogenic,36,9.1.2 Run-off
+6,Other anthropogenic,36,6.3 Work & other activities
+6,Unknown,36,5.4.6 Motivation Unknown/Unrecorded
+6,Intrinsic,36,101.40 OLD 9.10 Intrinsic factors->Other
+6,Intrinsic,36,101.39 OLD 9.9 Intrinsic factors->Restricted range
+6,Other anthropogenic,36,9.4 Garbage & solid waste
+6,Other anthropogenic,36,9.6.3 Noise pollution
+6,Other anthropogenic,36,7.3 Other ecosystem modifications
+6,Other anthropogenic,36,1.3 Tourism & recreation areas
+6,Other anthropogenic,36,1.2 Commercial & industrial areas
+6,Unknown,36,2.4.3 Scale Unknown/Unrecorded
+6,Unknown,36,11.5 Other impacts
+6,Other anthropogenic,36,9.3.3 Herbicides and pesticides
+6,Other anthropogenic,36,9.2.2 Seepage from mining
+6,Other environmental/climate,36,11.4 Storms & flooding
+6,Other anthropogenic,36,2.2.2 Agro-industry plantations
+6,Other anthropogenic,36,"2.3.3 Agro-industry grazing, ranching or farming"
+6,Other anthropogenic,36,2.1.3 Agro-industry farming
+6,Other anthropogenic,36,9.6.2 Thermal pollution
+6,Other anthropogenic,36,3.3 Renewable energy
+6,Other environmental/climate,36,9.5.1 Acid rain
+6,Other anthropogenic,36,100.29 OLD 4.2.3 Accidental mortality->Collision->Other
+6,Unknown,36,100.55 OLD 12 Unknown
+6,Other anthropogenic,36,4.1 Roads & railroads
+6,Other anthropogenic,36,7.2.1 Abstraction of surface water (domestic use)
+6,Other anthropogenic,36,7.2.5 Abstraction of ground water (domestic use)
+6,Other anthropogenic,36,7.2.6 Abstraction of ground water (commercial use)
+6,Other anthropogenic,36,7.2.7 Abstraction of ground water (agricultural use)
+6,Other environmental/climate,36,11.2 Droughts
+6,Other anthropogenic,36,7.2.2 Abstraction of surface water (commercial use)
+6,Other anthropogenic,36,7.2.3 Abstraction of surface water (agricultural use)
+6,Other anthropogenic,36,"9.3.2 Soil erosion, sedimentation"
+6,Other anthropogenic,36,9.3.1 Nutrient loads

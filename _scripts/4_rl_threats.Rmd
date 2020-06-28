@@ -1,0 +1,177 @@
+---
+title: "redlist_threats"
+author: "Leslie Roberson"
+date: "3/4/2020"
+output: html_document
+---
+
+## Summary
+
+RL threats codes and supplementary info, provided by Beth Polidoro at IUCN
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(data.table)
+library(janitor)
+library(readxl)
+
+```
+
+## cleaned data
+
+```{load cleaned data}
+
+threats <- read_excel("_data/spp_rl_threatcodes.xlsx")
+names(threats)
+head(threats)
+
+## explore threats
+
+n_distinct(threats$friendly_name) # n = 92
+unique(threats$threatslookup_value)
+
+threats <- threats %>% filter(!is.na(threatslookup_value))
+nrow(threats) 
+unique(threats$timing_value)
+
+## ongoing threats
+ongoing <- threats %>% filter(timing_value == "Ongoing")
+nrow(ongoing) 
+
+ongoing %>%
+  group_by(threatslookup) %>%
+  summarise(n_spp = n_distinct(friendly_name))
+
+View(ongoing %>%
+  distinct(threatslookup, threatslookup_value) %>%
+  arrange(desc(threatslookup)))
+
+## mutate general threat groups
+ongoing <- ongoing %>%
+  mutate(my_threats = case_when(
+    threatslookup %in% c(35,46,51,52,53,54,155,187,188,189,190,199,202,203) ~ "Fishing",
+    threatslookup %in% c(23, 56, 98, 102, 107, 128, 130, 178) ~ "Unknown",
+    threatslookup %in% c(219, 218, 216, 214, 211)  ~ "Intrinsic",
+    threatslookup %in% c(127, 126, 125, 110, 83, 82, 81) ~ "Other environmental/climate",
+    TRUE ~ "Other anthropogenic"
+  ))
+
+## mutate more specific fishing threat groups
+ongoing <- ongoing %>%
+  mutate(my_threats_detail = case_when(
+    threatslookup_value %in% c("101.4 OLD 3.1.3 Harvesting (hunting/gathering)->Food->Regional/international trade",
+                               "101.16 OLD 3.4.3 Harvesting (hunting/gathering)->Materials->Regional/international trade",
+                               "5.4.2 Intentional use: (large scale) [harvest]",
+                               "5.3.2 Intentional use: (large scale) [harvest]"
+                               ) ~ "Fishing_ind_target",
+    threatslookup_value %in% c("5.4.4 Unintentional effects: (large scale) [harvest]"
+                               ) ~ "Fishing_ind_bycatch",
+    threatslookup_value %in% c("101.3 OLD 3.1.2 Harvesting (hunting/gathering)->Food->Sub-national/national trade",
+                               "101.2 OLD 3.1.1 Harvesting (hunting/gathering)->Food->Subsistence use/local trade",
+                               "5.4.1 Intentional use: (subsistence/small scale) [harvest]"
+                               ) ~ "Fishing_ss_target",
+    threatslookup_value %in% c("5.4.3 Unintentional effects: (subsistence/small scale) [harvest]"
+                               ) ~ "Fishing_ss_bycatch",
+    threatslookup_value %in% c("101.17 OLD 3.5 Harvesting (hunting/gathering)->Cultural/scientific/leisure activities",
+                               "101.1 OLD 3.1 Harvesting (hunting/gathering)->Food",
+                               "5.1.1 Intentional use (species is the target)"
+                              ) ~ "Fishing_unspecified",
+    threatslookup %in% c(23, 56, 98, 102, 107, 128, 130, 178) ~ "Unknown",
+    threatslookup %in% c(219, 218, 216, 214, 211)  ~ "Intrinsic",
+    threatslookup %in% c(127, 126, 125, 110, 83, 82, 81) ~ "Other environmental/climate",
+    TRUE ~ "Other anthropogenic"
+  ))
+
+## make SI table for threats 
+
+names(ongoing)
+
+# assign numbers to detailed threats
+unique(ongoing$my_threats_detail)
+
+ongoing <- ongoing %>%
+  mutate(mythreats_codes = case_when(
+    my_threats_detail == "Fishing_ind_target" ~ 1,
+    my_threats_detail == "Fishing_ind_bycatch" ~ 2,
+    my_threats_detail == "Fishing_ss_target" ~ 3,
+    my_threats_detail == "Fishing_ss_bycatch" ~ 4,
+    my_threats_detail == "Fishing_unspecified" ~ 5,
+    TRUE ~ 6
+  ))
+
+## make table of all listed (ongoing) threats > SI table 2
+si_table_threats <- ongoing %>%
+  group_by(mythreats_codes) %>%
+  mutate(n_spp = n_distinct(friendly_name)) %>%
+  distinct(mythreats_codes, my_threats_detail, threatslookup_value, n_spp) %>%
+  arrange(mythreats_codes) %>%
+  select(c(mythreats_codes, my_threats_detail, n_spp, threatslookup_value))
+
+write_csv(si_table_threats, "_results/tables/SI_table_threatsdata.csv") 
+  
+## concatenate my threat codes to add to spp SI table
+
+spp_threatcodes <- ongoing %>%
+  group_by(friendly_name) %>%
+  distinct(friendly_name, mythreats_codes) %>%
+  arrange(friendly_name, mythreats_codes) %>%
+  summarise(threat_codes = paste(mythreats_codes, collapse = ",")) %>%
+  ungroup()
+
+write_csv(spp_threatcodes, "_results/tables/spp_threatcodes_summ.csv")
+
+##<><><>< threat totals including cod
+
+table(ongoing$my_threats)
+
+ongoing %>%
+  group_by(my_threats) %>%
+  summarise(n_spp = n_distinct(friendly_name),
+            prop = n_spp/92*100) %>%
+  ungroup()
+
+ongoing %>%
+  group_by(my_threats_detail) %>%
+  summarise(n_spp = n_distinct(friendly_name),
+            prop = n_spp/92*100) %>%
+  ungroup()
+
+##<><><>< threat totals excluding cod
+ongoing %>%
+  filter(friendly_name != "Gadus morhua") %>%
+  group_by(my_threats) %>%
+  summarise(n_spp = n_distinct(friendly_name),
+            prop = n_spp/91*100) %>%
+  ungroup()
+
+ongoing %>%
+  filter(friendly_name != "Gadus morhua") %>%
+  group_by(my_threats_detail) %>%
+  summarise(n_spp = n_distinct(friendly_name),
+            prop = n_spp/91*100) %>%
+  ungroup()
+
+## Any species ONLY threatened by fishing?
+
+ongoing %>%
+  distinct(friendly_name, my_threats) %>%
+  group_by(friendly_name) %>%
+  mutate(no_dups = n()==1) %>%
+  filter(no_dups == TRUE & my_threats == "Fishing") %>% 
+  arrange(friendly_name) %>%
+  ungroup()
+
+## Any species ONLY threatened by large scale intentional fishing?
+
+ongoing %>%
+  distinct(friendly_name, my_threats_detail) %>%
+  group_by(friendly_name) %>%
+  mutate(no_dups = n()==1) %>%
+  filter(no_dups == TRUE & my_threats_detail == "Fishing_ind_target") %>% 
+  arrange(friendly_name) %>%
+  ungroup()
+  
+```
+

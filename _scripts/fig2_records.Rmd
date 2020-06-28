@@ -1,0 +1,77 @@
+---
+title: "fig_record_rez"
+author: "Leslie Roberson"
+date: "4/22/2020"
+output: html_document
+---
+
+## Summary
+
+Figure 2: Proportion of catch and imports volumes recorded at species level (blue) versus aggregated (grey) records for teleosts, chondrichthyans, invertebrates, and other commodities (e.g., "Marine animals").  The number indicates the proportion of total catch or import volume in each taxonomic group over the time period (2006–2014 for catch and 2006–2015 for imports). Threatened = Critically Endangered, Endangered, or Vulnerable, Not Threatened = Least Concern or Near Threatened, Unknown status = Data Deficient or has not been assessed. Aggregated = not a species-level record. 
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(cowplot)
+library(RColorBrewer)
+library(ggpubr)
+
+```
+
+## Paired donut charts
+
+e.g. 6 donuts, 3 taxa groups x catch/trade
+
+Code derived from https://rdrr.io/cran/ggpubr/man/ggdonutchart.html
+
+
+```{paired donuts}
+
+plot_dat <- read_csv("_data//record_rez_plotdat.csv")
+names(plot_dat)
+
+## <><><>>< prep
+plot_dat$taxa_group2 <- as_factor(plot_dat$taxa_group2)
+plot_dat$taxa_group2 <- fct_relevel(plot_dat$taxa_group2, "Teleost","Chondrichthyan","Invertebrate","Other")
+
+plot_dat$record_cat <- as_factor(plot_dat$record_cat)
+plot_dat$record_cat <- fct_relevel(plot_dat$record_cat, "spp_th","spp_not_th","spp_unknown_status","aggregated")
+
+mycolors <- c("darkblue", "deepskyblue", "dodgerblue3", "dimgrey")
+
+## <><><><>plot
+
+library(ggpubr)
+library(cowplot)
+
+## CATCH 
+
+catch_donut <- ggdonutchart(plot_dat, "catch_prop_group", fill = "record_cat", color = "white",
+                            palette = mycolors) +
+  facet_wrap( ~ taxa_group2, 
+              ncol = 4,
+              ) +
+  theme_void() +
+  theme(legend.position = "none")
+
+## TRADE
+
+trade_donut <- ggdonutchart(plot_dat, "trade_prop_group", fill = "record_cat", color = "white",
+                            palette = mycolors) +
+  facet_wrap( ~ taxa_group2, 
+              ncol = 4
+              ) +
+  theme_void() +
+  theme(legend.position = "none")
+
+## pull legend
+leg_records <- get_legend(trade_donut)
+as_ggplot(leg_records)
+
+## combine
+plot_grid(catch_donut, trade_donut, nrow = 2)
+
+## Final formatting (e.g. species icons) done in Adobe illustrator
+
+```
+

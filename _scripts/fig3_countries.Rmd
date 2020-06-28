@@ -1,0 +1,171 @@
+---
+title: "fig_countries"
+author: "Leslie Roberson"
+date: "4/22/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(ggrepel)
+library(scales)
+library(ggpubr)
+library(cowplot) # for ggsave
+library(Cairo) # for preserving semi transparency
+
+```
+
+## Make scatter plot
+
+CATCH PLOT
+- 2014 country catch volume wma
+- 2014 country catch value wma
+- 2014 threatened species catch volume wma
+- 2014 ratio aggregated: species-level records (using wmas)
+
+IMPORTS PLOT
+- 2015 country imports volume wma
+- 2015 country imports value wma
+- 2015 threatened species imports volume wma
+- 2015 ratio aggregated: species-level records (using wmas)
+
+```{scatter plot}
+
+## load prepped data
+
+catch_dat <- read_csv("_data/countries_catch_plotdat.csv")
+names(catch_dat)
+
+## make first panel (catch)
+
+summary(catch_dat$catch_vol_2014) # 0 - 10,325,375
+summary(catch_dat$catch_val_2014) # 5.400e+01 - 1.469e+10
+str(catch_dat)
+n_distinct(catch_dat$fishing_entity) # n = 163
+
+p_catch <- catch_dat %>% 
+  # add labels to data so they repel from all points,
+  # not just labelled points
+  mutate(label = case_when(country_name_short %in% slice_max(catch_dat, n=20, catch_vol_2014)$country_name_short ~ country_name_short,
+                           country_name_short %in% slice_max(catch_dat, n=25, catch_wma_spp_th)$country_name_short ~ country_name_short,
+                           TRUE ~ "")) %>%
+  # plot million tonnes and billion $
+  ggplot(aes(x = as.numeric(catch_vol_2014/1e3),
+             # catch val in USD billions
+             y = as.numeric(catch_val_2014/1e9), 
+             colour = as.numeric(ratio_vol),
+             size = as.numeric(catch_wma_spp_th/1e3),
+             label = label)) +
+  # map size in point geom so it doesn't affect the labels
+  # plot spp catch tonnes as thousand tonnes
+  geom_point(mapping = aes(size = as.numeric(catch_wma_spp_th/1e3))) + 
+  # don't show color scale legend
+  scale_colour_viridis_c(guide = FALSE) + # more readable with more colours
+  #scale_y_continuous(limits = c(0,15), breaks = seq(0,15,3)) + 
+  #scale_x_log10(breaks = log_breaks()) +
+  #scale_y_log10(breaks = log_breaks()) +
+  scale_x_sqrt(breaks = scales::extended_breaks(n = 8)) +
+  scale_y_sqrt(breaks = scales::extended_breaks(n = 8)) +
+  labs(x = "Total catch volume (thousand tonnes)",
+       y = "Total catch value (USD billions)",
+       size = "Th. species\ncatch volume",
+       colour = "Aggregated/nrecords") +
+  geom_text_repel(point.padding = 0.4,
+                  size = 2.5,
+                  # nudge distance has to correspond to the axis units 
+                  nudge_x = 5, 
+                  nudge_y = 0.2) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 8),
+        legend.position = c(0.2, 0.8))
+p_catch
+## save using cairo to preserve semi transparency in eps
+ggsave(filename = "FILEPATH.eps", 
+       plot = print(p_catch), 
+       width = 5, height = 5,
+       dpi = 300, device = cairo_ps) 
+
+
+
+## <><>make second panel (imports)
+
+imports_dat <- read_csv("_data/countries_imports_plotdat.csv")
+names(imports_dat)
+
+summary(imports_dat$import_vol_2015) # 0.6  - 1,240,274
+summary(imports_dat$import_val_2015) # 1.388e+03 - 2.443e+09
+str(imports_dat)
+n_distinct(imports_dat$importer_name) # n = 209
+
+imports_dat <- imports_dat %>% 
+  mutate(importer_name = country_name_short) # country name short isn't working here for some reason
+
+p_imports <- imports_dat %>% 
+  filter(import_vol_2015 > 0) %>%
+  mutate(label = case_when(importer_name %in% slice_max(imports_dat, n=20, import_vol_2015)$importer_name~ importer_name,
+                           importer_name %in% slice_max(imports_dat, n=25, import_vol_wma_spp_th)$importer_name ~ importer_name,
+                           TRUE ~ "")) %>% 
+  ggplot(aes(x = as.numeric(import_vol_2015/1e3),
+             y = as.numeric(import_val_2015/1e9),
+             colour = as.numeric(ratio_vol),
+             size = as.numeric(import_vol_wma_spp_th/1e3),
+             label = label)) +
+  geom_point(mapping = aes(size = as.numeric(import_vol_wma_spp_th/1e3))) + 
+  scale_colour_viridis_c(guide = FALSE) + 
+  guides(size = guide_legend()) +
+  labs(x = "Total import volume (thousand tonnes)",
+       y = "Total import value (USD billions)",
+       size = "Th. species\nimport volume",
+       colour = "Aggregated/nrecords") +
+  geom_text_repel(point.padding = 0.4,
+                  size = 2.5,
+                  nudge_x = 100, 
+                  nudge_y = 0.1) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 8),
+        legend.position = c(0.2, 0.8))
+p_imports
+## save using cairo to preserve semi transparency in eps
+ggsave(filename = "_results/figures/imports_countries_9jun.eps", 
+       plot = print(p_imports), 
+       width = 5, height = 5,
+       dpi = 300, 
+       device = cairo_ps) 
+
+## get color legend
+p_legend <- imports_dat %>% 
+  filter(import_vol_2015 > 0) %>%
+  ggplot(aes(x = as.numeric(import_vol_2015/1e3),
+             y = as.numeric(import_val_2015/1e9),
+             colour = as.numeric(ratio_vol),
+             size = as.numeric(import_vol_wma_spp_th/1e3))) +
+  geom_point(mapping = aes(size = as.numeric(import_vol_wma_spp_th/1e3)), alpha = 0.7) + 
+  # show color scale legend
+  scale_colour_viridis_c() + 
+  guides(size = guide_legend()) +
+  labs(colour = "Aggregated/nrecords") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        legend.direction = "horizontal",
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 8),
+        legend.position = c(0.8, 0.2))
+
+leg_color <- get_legend(p_legend)
+as_ggplot(leg_color)
+
+## final formatting of legends and labels in Adobe Illustrator 
+
+```
+

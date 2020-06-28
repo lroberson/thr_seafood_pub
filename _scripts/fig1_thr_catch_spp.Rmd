@@ -1,0 +1,149 @@
+---
+title: "fig1_thr_catch_spp"
+author: "Leslie Roberson"
+date: "28/6/2020"
+output: html_document
+---
+
+## Summary
+
+Figure 1: Global mean ex-vessel price for 2010 (USD/kg) and Red List status for the 91 threatened teleost, chondrichthyan, and invertebrate species recorded in global catch data from 2006–2014, ordered clockwise by descending catch volume for each taxonomic group (teleosts, chondrichthyans, and invertebrates). Error bars show max price for 2010. The 13 species with red asterisks are found in global import records from 2006–2015. The 34 species in bold have commercially exploited populations listed in the RAM Legacy Stock Assessment database.
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(hablar)
+library(RColorBrewer)
+library(ggpubr)
+
+```
+
+## Circle plot
+
+Grouped by taxa_group
+bar color = redlist category
+bold name = imported
+* name = in RAM stock db
+Outer ring: Mean price with standard deviation bar
+
+based off code from https://www.r-graph-gallery.com/297-circular-barplot-with-groups.html
+
+```{sau catch spp circle plot}
+
+## load plotdat
+
+data_raw <- read_csv("_data/thr_catch_spp_plotdat.csv")
+names(data_raw)
+
+data <- data_raw
+data$redlist_category <- as_factor(data$redlist_category)
+levels(data$redlist_category)
+data$redlist_category <- fct_relevel(data$redlist_category, "CR","EN","VU")
+
+## make color palette
+mycolors <- c("red4","orangered2","orange")
+
+data$taxa_group <- as_factor(data$taxa_group)
+levels(data$taxa_group)
+data$taxa_group <- fct_relevel(data$taxa_group, "Teleost","Chondrichthyan","Invertebrate")
+
+## make a col with mean + std to place labels
+data <- data %>% 
+  rowwise() %>%
+  mutate(usd_max = sum(usd_kg_mean,usd_kg_std))
+
+##<><><>>< prepare plot data: 
+
+# Set a number of 'empty bar' to add at the end of each group
+empty_bar <- 5
+
+to_add <- data.frame(matrix(NA, empty_bar*nlevels(data$taxa_group), ncol(data)) )
+colnames(to_add) <- colnames(data)
+to_add$taxa_group <- rep(levels(data$taxa_group), each=empty_bar)
+
+data <- rbind(data, to_add)
+## arrange by price
+#data <- data %>% arrange(taxa_group, -usd_kg_mean)
+## arrange by catch volume proportion
+data <- data %>% arrange(taxa_group, -prop_thr_catch)
+data$id <- seq(1, nrow(data))
+
+# Get the name and the y position of each label
+label_data <- data
+number_of_bar <- nrow(label_data)
+angle <- 90-360*(label_data$id-0.5) /number_of_bar  # substract 0.5 because the letter must have the angle of the center of the bars. Not extreme right(1) or extreme left (0)
+label_data$hjust <- ifelse(angle < -90, 1, 0)
+label_data$angle <- ifelse(angle < -90, angle+180, angle)
+
+# prepare a data frame for base lines
+base_data <- data %>% 
+  group_by(taxa_group) %>% 
+  summarize(start=min(id), end=max(id) - empty_bar) %>% 
+  rowwise() %>% 
+  mutate(title=mean(c(start, end)))
+
+# prepare a data frame for grid (scales)
+grid_data <- base_data
+grid_data$end <- grid_data$end[ c(nrow(grid_data), 1:nrow(grid_data)-1)] + 1
+grid_data$start <- grid_data$start - 1
+grid_data <- grid_data[-1,]
+
+summary(grid_data)
+
+# check price range
+summary(data$usd_kg_mean) # 0.3 - 17
+summary(data$usd_kg_std) # 0 - 11.5
+
+  
+##<><><<> make the plot (outer ring)
+names(data)
+
+p_outer <- ggplot(data, aes(x=as.factor(id), y=usd_kg_mean, fill = redlist_category)) + # NB id is a factor. If x is numeric, there is some space between the first bar
+  geom_bar(aes(x=as.factor(id), y=usd_kg_mean, fill=redlist_category), stat="identity") +
+  ylim(-20,35) +
+  theme_minimal() +
+  theme(
+    #legend.position = c(0.5,0.5),
+    legend.position = "none",
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank(),
+    plot.margin = unit(rep(-1,4), "cm") 
+  ) +
+  scale_fill_manual(values = mycolors) + 
+# Add a val= 5/10/15 lines. I do it after the bars to make sure barplots are under it
+  geom_segment(data=grid_data, aes(x = end, y=20, xend=start, yend=20), colour="grey", alpha=1, size=0.3, inherit.aes=FALSE) +
+  geom_segment(data=grid_data, aes(x = end, y=15, xend=start, yend=15), colour="grey", alpha=1, size=0.3, inherit.aes=FALSE) +
+  geom_segment(data=grid_data, aes(x = end, y=10, xend=start, yend=10), colour="grey", alpha=1, size=0.3, inherit.aes=FALSE) +
+  geom_segment(data=grid_data, aes(x = end, y=5, xend=start, yend=5), colour="grey", alpha=1, size=0.3, inherit.aes=FALSE) +
+  geom_segment(data=grid_data, aes(x = end, y=0, xend=start, yend=0), colour="grey", alpha=1, size=0.3, inherit.aes=FALSE) +
+  annotate("text", x=rep(max(data$id),5), y=c(0,5,10,15,20), label=c("$0","$5","$10","$15","$20"), color="grey", size=2.5, angle=0, fontface="bold", hjust=1) +
+  coord_polar() + 
+# add bar for std
+  geom_errorbar(aes(ymin = usd_kg_mean,
+                    ymax = usd_kg_mean + usd_kg_std),
+                    color = "darkgray",
+                    #position = position_dodge(),
+                    width = 0.3) + 
+  geom_text(data=label_data, aes(x=id, y=usd_max+2, label=taxon_sciname, hjust=hjust,
+                                 fontface = ifelse(ram_yn == "y", "bold.italic", "italic")), 
+            color="black", 
+            size=2, angle= label_data$angle, inherit.aes = FALSE ) 
+
+p_outer 
+
+## save (with transparency so text is exported)
+cairo_ps(filename = "filepath.eps",
+         width = 7, height = 7, pointsize = 12,
+         fallback_resolution = 300)
+print(p_outer)
+dev.off()
+
+## extract legend
+leg_outer <- ggpubr::get_legend(p_outer)
+as_ggplot(leg_outer)
+
+
+##NB: bold font and astericks where formatted in Adobe Illustrator
+
+```

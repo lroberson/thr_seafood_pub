@@ -1,0 +1,307 @@
+---
+title: "8b_sau_catch_explore"
+author: "Leslie Roberson"
+date: "4/21/2020"
+output: html_document
+---
+
+## Summary
+
+Here I take the SAU catch with the added redlist and calculate the global totals
+
+```{r setup, include=FALSE}
+
+library(here)
+library(tidyverse)
+library(data.table)
+
+```
+
+## Explore species catch totals
+
+Here Atlantic cod (Gadus morhua) was changed from VU to LC, as explained in the Methods
+
+```{global catch totals}
+
+## load cleaned catch data with rl
+sau_catch <- read_csv("_data/sau_catch_pub.csv")
+names(sau_catch)
+
+sau_catch %>% filter(taxon_sciname == "Gadus morhua") %>% select(taxon_sciname, redlist_category) # LC
+
+## <><>>< totals VOLUME and VALUE
+
+# all commodities
+sau_catch %>% 
+  summarise(tot_catch = sum(catch_recons), 
+            avg_catch = tot_catch/9, 
+            tot_usd = sum(value_econom), 
+            avg_usd = tot_usd/9) 
+
+# thr species
+sau_catch %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  summarise(tot_catch = sum(catch_recons), 
+            avg_catch = tot_catch/9, 
+            tot_usd = sum(value_econom), 
+            avg_usd = tot_usd/9) 
+
+# th reported catch totals with cod:
+sau_catch %>% 
+  filter(redlist_category %in% c("CR","EN","VU") | taxon_sciname == "Gadus morhua") %>%
+  summarise(tot_catch = sum(catch_recons), 
+            tot_usd = sum(value_econom)) 
+
+## 2014 totals with cod
+sau_catch %>% 
+  filter(year == 2014) %>%
+  filter(redlist_category %in% c("CR","EN","VU") | taxon_sciname == "Gadus morhua") %>%
+  summarise(tot_catch = sum(catch_recons)) # 2044957 mt
+
+## 2014 totals without cod
+
+sau_catch %>% 
+  filter(year == 2014) %>%
+  filter(redlist_category %in% c("CR","EN","VU")) %>%
+  summarise(tot_catch = sum(catch_recons)) # 905459 mt
+
+
+##<><><>< totals Record types
+
+nrow(sau_catch) 
+
+## explore record groups
+table(sau_catch$record_cat)
+
+## number of distinct commodity records in catch data 2006 - 2014
+n_distinct(sau_catch$taxon_sciname) 
+
+## number of aggregated commodity record groups
+sau_catch %>% 
+  filter(record_cat == "aggregated") %>%
+  summarise(count = n_distinct(taxon_sciname)) 
+
+## number of DD or unnassessed species record groups
+sau_catch %>% 
+  filter(spp_yn == "yes" & record_cat == "spp_unknown_status") %>%
+  summarise(count = n_distinct(taxon_sciname)) 
+
+## record categories
+sau_catch %>% 
+  group_by(record_cat) %>%
+  summarise(tot_vol = sum(catch_recons),
+            tot_val = sum(value_econom)) %>%
+  ungroup() %>%
+  mutate(prop_vol = tot_vol/sum(tot_vol)*100,
+            prop_val = tot_val/sum(tot_val)*100)
+
+```
+
+## All commodities exvessel price list
+
+Here I take the mean price (2006 - 2014)
+The price database ends in 2010, so 2011-2014 value estimates use the 2010 prices
+
+```{commodity price list}
+
+## load cleaned catch data with rl
+sau_catch <- read_csv("_data/sau_catch_pub.csv")
+names(sau_catch)
+
+## totals and proportions for each commodity
+
+names(sau_catch)
+
+sau_catch %>% 
+  summarise(catch_tot = sum(catch_recons), 
+            usd_tot = sum(value_econom)) 
+
+sau_commodities_summ <- sau_catch %>% 
+  group_by(taxon_sciname, record_cat, taxa_group, redlist_category, year) %>%
+  summarise(catch_spp = sum(catch_recons),
+            usd_spp = sum(value_econom)) %>%
+  rowwise() %>%
+  mutate(usd_kg = ((usd_spp/catch_spp)/1000)) %>%
+  ungroup() %>%
+  group_by(taxon_sciname, record_cat, taxa_group, redlist_category) %>%
+  summarise(catch_spp_tot = sum(catch_spp),
+            catch_spp_mean = mean(catch_spp),
+            catch_spp_std = sd(catch_spp),
+            usd_spp_tot = sum(usd_spp),
+            usd_kg_mean = mean(usd_kg),
+            usd_kg_std = sd(usd_kg),
+            prop_catch = catch_spp_tot/517950267*100,
+            prop_usd = usd_spp_tot/653632397741*100) %>%
+  arrange(desc(prop_catch)) %>%
+  #arrange(desc(prop_usd)) %>%
+  #arrange(desc(usd_kg_mean)) %>%
+  ungroup()
+
+
+## get 2014 prices (most recent price - which is actually the 2010 price)
+
+prices_2014 <- sau_catch %>% 
+  filter(year == 2014) %>%
+  group_by(taxon_sciname, year) %>%
+  summarise(catch_spp = sum(catch_recons),
+            usd_spp = sum(value_econom)) %>%
+  rowwise() %>%
+  mutate(usd_kg_2014 = ((usd_spp/catch_spp)/1000)) %>%
+  ungroup()
+
+prices_2014 %>% filter(is.na(usd_kg_2014)) # no missing prices 
+names(prices_2014)
+prices_2014 %>% find_duplicates(taxon_sciname) # none
+
+write_csv(prices_2014, "_results/sau_prices_2014.csv")
+
+
+##<><< add 2014 prices to SAU commodity list
+
+sau_spp_list <- read_csv("data/sau_commods_rl.csv")
+
+names(sau_spp_list)
+n_distinct(sau_spp_list$taxon_sciname) 
+
+sau_spp_list <- sau_spp_list %>%  rename(usd_mt_avg = usd_per_mt)
+sau_spp_list %>% filter(is.na(usd_mt_avg))
+
+names(prices_2014)
+prices_2014 <- prices_2014 %>% select(c(taxon_sciname, usd_kg_2014))
+prices_2014 <- prices_2014 %>% mutate(usd_mt_2014 = usd_kg_2014*1000) %>% select(-usd_kg_2014)
+n_distinct(prices_2014$taxon_sciname)
+
+## join
+sau_spp_list <- left_join(sau_spp_list, prices_2014, by = "taxon_sciname")
+names(sau_spp_list)
+
+## fill missing 2014 prices with average price
+sau_spp_list <- sau_spp_list %>%
+  mutate(usd_mt_2014 = ifelse(is.na(usd_mt_2014), usd_mt_avg, usd_mt_2014)) %>%
+  select(c(taxon_sciname,redlist_category,tot_catch_mt,tot_value_usd,usd_mt_avg,usd_mt_2014,everything())) %>%
+  rename(iucn_taxonid = internal_taxon_id)
+
+sau_spp_list %>% filter(is.na(usd_mt_2014)) #
+
+sau_spp_list %>% find_duplicates(taxon_sciname)
+
+sau_spp_list <- sau_spp_list %>% distinct()
+
+write_csv(sau_spp_list, "data/sau_commods_rl.csv")
+
+```
+
+## Explore thr species catch 
+
+
+```{thr catch species}
+
+sau_catch <- fread("_data/sau_catch_pub.csv")
+names(sau_catch)
+
+## some wrangling
+unique(sau_catch$redlist_category)
+sau_catch %>% filter(is.na(redlist_category)) %>% distinct(taxon_sciname)
+sau_catch$redlist_category <- fct_collapse(sau_catch$redlist_category, LR = c("LR_NT","LR_LC"))
+
+## number thr species
+sau_catch %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  summarise(count = n_distinct(taxon_sciname)) # n = 91
+
+sau_catch %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  group_by(taxa_group) %>%
+  summarise(count = n_distinct(taxon_sciname)) %>%
+  ungroup()
+
+sau_catch %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  group_by(redlist_category) %>%
+  summarise(count = n_distinct(taxon_sciname)) %>%
+  ungroup()
+
+## top spp 
+sau_catch %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  group_by(taxon_sciname) %>%
+  summarise(tot_vol = sum(catch_recons),
+            tot_val = sum(value_econom)) %>%
+  arrange(desc(tot_vol)) %>% # different order but same top species 
+  #arrange(desc(tot_val)) %>%
+  ungroup()
+  
+
+## totals and proportion of reported industrial th spp catch 
+
+sau_catch %>% 
+  summarise(catch_tot = sum(catch_recons), 
+            usd_tot = sum(value_econom)) 
+
+sau_catch %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  summarise(catch_tot_thr = sum(catch_recons), 
+            usd_tot_thr = sum(value_econom)) 
+
+thr_spp_summ <- sau_catch %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  group_by(taxon_sciname, taxa_group, redlist_category, year) %>%
+  summarise(catch_spp = sum(catch_recons),
+            usd_spp = sum(value_econom)) %>%
+  rowwise() %>%
+  mutate(usd_kg = ((usd_spp/catch_spp)/1000)) %>%
+  ungroup() %>%
+  group_by(taxon_sciname, taxa_group, redlist_category) %>%
+  summarise(catch_spp_tot = sum(catch_spp),
+            catch_spp_mean = mean(catch_spp),
+            catch_spp_std = sd(catch_spp),
+            usd_spp_tot = sum(usd_spp),
+            usd_kg_mean = mean(usd_kg),
+            usd_kg_std = sd(usd_kg),
+            prop_thr_catch = catch_spp_tot/8078788*100,
+            prop_thr_usd = usd_spp_tot/16337521737*100) %>%
+  arrange(desc(prop_thr_catch)) %>%
+  #arrange(desc(prop_thr_usd)) %>%
+  #arrange(desc(usd_per_kg_mean)) %>%
+  ungroup()
+head(thr_spp_summ, 20)
+
+
+## <><><> explore number fishing countries 
+
+thr_spp_fishers <- sau_catch %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  group_by(taxon_sciname) %>%
+  summarise(n_fishers = n_distinct(fishing_entity)) %>%
+  #arrange(desc(n_fishers)) %>%
+  arrange(n_fishers) %>%
+  ungroup()
+n_distinct(thr_spp_fishers$taxon_sciname)
+
+## top vol spp compared to others
+thr_spp_fishers %>% 
+  filter(taxon_sciname %in% c("Melanogrammus aeglefinus", "Trachurus trachurus", "Thunnus obesus")) %>%
+  summarise(avg_fishers = mean(n_fishers)) # n = 41
+thr_spp_fishers %>% 
+  filter(taxon_sciname %in% c("Melanogrammus aeglefinus", "Trachurus trachurus", "Thunnus obesus")) %>%
+  arrange(desc(n_fishers))
+
+thr_spp_fishers %>% 
+  filter(!taxon_sciname %in% c("Melanogrammus aeglefinus", "Trachurus trachurus", "Thunnus obesus")) %>%
+  summarise(avg_fishers = mean(n_fishers)) # n - 8.9
+
+thr_spp_fishers %>% 
+  filter(taxon_sciname != "Thunnus obesus") %>%
+  summarise(avg_fishers = mean(n_fishers)) # n = 9.3
+
+thr_spp_fishers %>% filter(n_fishers == 1) # 19 species
+
+
+## <><>join n_fishers to catch spp summ
+n_distinct(thr_spp_summ$taxon_sciname)
+thr_spp_summ <- left_join(thr_spp_summ, thr_spp_fishers, by = "taxon_sciname")
+
+write_csv(thr_spp_summ, "_results/thr_catch_spp_summ.csv")
+
+```
+

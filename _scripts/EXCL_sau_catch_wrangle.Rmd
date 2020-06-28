@@ -1,0 +1,255 @@
+---
+title: "8_sau_catch"
+author: "Leslie Roberson"
+date: "3/22/2020"
+output: html_document
+---
+
+```{r}
+
+library(here)
+library(readxl)
+library(tidyverse)
+library(forcats)
+library(data.table)
+library(janitor)
+library(stringr)
+library(tm) # install.packages("tm")
+# masks ggplot2:: annotate
+library(hablar)
+
+```
+
+## Make SAU commodity list with Redlist info
+
+Data request from Deng Palomares/ SAU
+This SAU subset has only reported and industrial catch 
+
+```{sau spp list w rl}
+
+sau_raw <- read_csv("_data/sau_catch/roberson_catch2006_2014_202005141421.csv")
+head(sau_raw)
+
+summary(sau_raw) # NB goes to 2014, not 2015
+
+n_distinct(sau_raw$taxon_sciname) # n = 1456
+n_distinct(sau_raw$fishing_entity) # n = 163 fishing countries 
+
+## Make list and catch totals for SAU
+
+sau_catch_list <- sau_raw %>%
+  group_by(taxon_sciname) %>%
+  summarise(tot_catch_mt = sum(catch_recons),
+            tot_value_usd = sum(value_econom),
+            usd_per_mt = tot_value_usd/tot_catch_mt) %>%
+  ungroup()
+  
+sau_catch_list %>% arrange(desc(tot_catch_mt))
+
+
+#<><><><>><
+## Match sau catch_list to redlist 
+
+## load redlist
+rl_raw <- fread("/Users/leslieroberson/OneDrive - The University of Queensland/_data/_data_mod/fishing_thspp/iucn_rl/redlist_2019_2_cleaned_globalonly.csv")
+names(rl_raw)
+
+rl <- rl_raw %>% dplyr::select(-c(iucn_name_type,year_published,criteria_version,rationale,habitat,range,use_trade,realm,taxonomic_notes,year_last_seen))
+
+rl %>% find_duplicates(iucn_sciname) # none
+
+
+sau_rl <- left_join(sau_catch_list, rl, by = c("taxon_sciname" = "iucn_sciname"))
+
+head(sau_rl)
+table(sau_rl$redlist_category) 
+sau_rl %>% 
+  filter(redlist_category %in% c("Critically Endangered", "Endangered", "Vulnerable")) %>% 
+  summarise(thr = n_distinct(taxon_sciname)) # 91 thr species 
+
+unmatched_sau_rl <- anti_join(sau_catch_list, rl, by = c("taxon_sciname" = "iucn_sciname")) # 760 commodities don't have rl status or aren't species level
+
+unique(sau_rl$scopes)
+
+# sau_rl <- read_csv("_data/sau_commodities_rl.csv")
+
+##<><><> Make a spp yn col
+
+# sau_rl %>% dplyr::select(-c(conservation_actions, redlist_criteria, assessment_id)) %>% write_csv("_data/sau_catch/sau_commodities_rl.csv")
+# sau_rl <- read_csv(here("_data/sau_commodities_rl.csv"))
+
+# categorize all two word names as species (then manually check that list)
+
+sau_rl <- sau_rl %>% 
+  mutate(words = stringr::str_count(taxon_sciname, boundary("word")), # default is "character"
+                  spp_yn = ifelse(words == 2, "yes", "no")) 
+
+## check 
+sau_rl %>% filter(words == 1) %>% select(c(taxon_sciname, words, spp_yn, redlist_category)) # n = 371
+sau_rl %>% filter(words > 2) %>% select(c(taxon_sciname, words, spp_yn, redlist_category)) # n = 22
+  # all 3 word species names, + variations of "miscellaneous..." and "marine..."
+
+not_spp <- c("Marine finfishes not identified", "Marine fishes not identified", "Marine groundfishes not identified", 
+             "Marine pelagic fishes not identified", "Miscellaneous aquatic invertebrates", "Miscellaneous diadromous fishes", 
+             "Miscellaneous marine crustaceans")
+
+sau_rl <- sau_rl %>% 
+  # recode just these >2 word names as not species 
+  mutate(spp_yn = ifelse(words > 2 & taxon_sciname %in% not_spp, "no", "yes")) 
+
+sau_rl <- sau_rl %>% 
+  mutate(spp_yn = case_when(
+    words == 1 ~ "no",
+    words == 2 ~ "yes",
+    words > 2 & taxon_sciname %in% not_spp ~ "no",
+    words > 2 & !taxon_sciname %in% not_spp ~ "yes"))
+
+table(sau_rl$spp_yn)
+#  no  yes 
+# 378 1105
+
+## manually check the yes
+View(sau_rl %>% filter(words == 2) %>% arrange(taxon_sciname))
+
+
+#<><><>< make taxa group col (invertebrates, bony fish, chonds)
+
+unique(sau_rl$phylum_name)
+unique(sau_rl$class_name)
+View(sau_rl %>% distinct(order_name) %>% arrange(order_name))
+sau_rl %>% filter(is.na(class_name))
+
+inverts <- c("HOLOTHUROIDEA","CEPHALOPODA","ECHINOIDEA","MALACOSTRACA","MEROSTOMATA")
+         
+sau_rl <- sau_rl %>%      
+  mutate(taxa_group = case_when(
+    class_name =="ACTINOPTERYGII" ~ "Teleost",
+    class_name == "CHONDRICHTHYES" ~ "Chondrichthyan",
+    class_name %in% inverts ~ "Invertebrate"))
+
+table(sau_rl$taxa_group)
+
+#<><><><> recode redlist categories
+
+unique(sau_rl$redlist_category)
+
+sau_rl$redlist_category <- as_factor(sau_rl$redlist_category)
+
+sau_rl$redlist_category <-  fct_recode(sau_rl$redlist_category,
+             CR = "Critically Endangered",
+             EN = "Endangered",
+             VU = "Vulnerable",
+             NT = "Near Threatened",
+             LR_NT = "Lower Risk/near threatened",
+             LR_CD = "Lower Risk/conservation dependent",
+             LR_LC = "Lower Risk/least concern",
+             LC = "Least Concern",
+             DD = "Data Deficient")
+
+sau_rl$redlist_category <- forcats::fct_explicit_na(sau_rl$redlist_category, na_level = "None") # replace na
+
+sau_rl %>% filter(is.na(redlist_category)) # none
+sau_rl %>% distinct(redlist_category)
+
+#<><><>< make record_cat col 
+
+sau_rl <- sau_rl %>%
+  mutate(record_cat = case_when(
+    spp_yn == "no" ~ "aggregated",
+    spp_yn == "yes" & redlist_category %in% c("CR","EN","VU") ~ "spp_th",
+    spp_yn == "yes" & redlist_category %in% c("DD","None") ~ "spp_unknown_status",
+    spp_yn == "yes" & !redlist_category %in% c("CR","EN","VU","DD","None") ~ "spp_not_th"))
+
+table(sau_rl$record_cat)
+# aggregated         spp_not_th           spp_th      spp_unknown_status 
+#    378                580                 95                430 
+sau_rl %>% filter(is.na(record_cat))
+
+names(sau_rl)
+
+sau_rl <- sau_rl %>% dplyr::select(c(taxon_sciname,redlist_category,spp_yn,taxa_group,record_cat,everything()))
+
+## overwrite with wrangled list
+write_csv(sau_rl, "_data/sau_catch/sau_commodities_rl.csv")
+
+## check scopes
+
+sau_rl <- read_csv("_data/sau_catch/sau_commodities_rl.csv")
+names(sau_rl)
+nrow(sau_rl) # n = 1592
+
+sau_rl %>% filter(!is.na(assessment_id)) %>% find_duplicates(assessment_id)
+
+
+unique(sau_rl$scopes)
+sau_rl %>% filter(is.na(scopes)) %>% distinct(taxon_sciname, redlist_category, spp_yn, taxa_group, record_cat)
+View(sau_rl %>% find_duplicates(taxon_sciname))
+
+sau_rl <- sau_rl %>% distinct()
+nrow(sau_rl) # n = 1509
+View(sau_rl %>% find_duplicates(taxon_sciname))
+
+sau_rl %>% filter(redlist_category == "None")
+
+## assign a dummy assessment date to non rl species
+sau_rl$assessment_date <- as.Date(ymd_hms(sau_rl$assessment_date)) 
+sau_rl %>% filter(is.na(assessment_date))
+str(sau_rl)
+sau_rl$assessment_date <- sau_rl$assessment_date %>% replace_na(as.Date("1900-01-01"))
+
+## keep most recent assessment 
+sau_rl_global <- sau_rl %>%
+  group_by(taxon_sciname, redlist_category) %>%
+  slice(which.max(assessment_date))
+sau_rl_global %>% filter(redlist_category == "None")
+sau_rl_global %>% find_duplicates(taxon_sciname)
+
+## keep most recent assessment where species and scope is the same
+sau_rl_global <- sau_rl_global %>%
+  group_by(taxon_sciname, scopes) %>%
+  slice(which.max(assessment_date))
+
+sau_rl_global %>% find_duplicates(taxon_sciname) # none
+n_distinct(sau_rl_global$taxon_sciname) # n = 1456
+
+
+
+write_csv(sau_rl_global, "_data/sau_catch/sau_commodities_rl_globalonly.csv")
+
+```
+
+## Add rl data to SAU catch data
+
+NB the commodities not listed in the RL were manually categorized into taxa_group (chonds, teleosts, inverts)
+
+```{add spp metadata to sau catch}
+
+## load commoditiy list with all cols
+sau_rl_global <- read_csv("_data/sau_catch/sau_commodities_rl_globalonly.csv")
+names(sau_rl_global)
+
+## Load catch data
+sau_raw <- read_csv("_data/sau_catch/roberson_catch2006_2014_202005141421.csv")
+
+names(sau_raw)
+names(sau_rl_global)
+
+# remove extra cols
+sau_rl_global <- sau_rl_global %>% select(-c("tot_catch_mt","tot_value_usd","conservation_actions","family_name","redlist_criteria","iucn_taxonid" , "assessment_id","assessment_date","scopes")) 
+
+## join
+sau_catch <- left_join(sau_raw, sau_rl_global, by = "taxon_sciname") %>% rename(year = "\"year\"") 
+
+## checks
+names(sau_catch)
+n_distinct(sau_catch$taxon_sciname) # n = 1456
+anti_join(sau_catch, sau_rl_global, by = "taxon_sciname") %>% distinct(taxon_sciname, redlist_category, spp_yn, taxa_group, record_cat) # none
+
+## correct thunnus thynnus error
+sau_catch <- sau_catch %>% mutate(redlist_category = replace(redlist_category, taxon_sciname == "Thunnus thynnus", "EN"))
+
+## save df
+write_csv(sau_catch, "/Users/leslieroberson/OneDrive - The University of Queensland/_data/_data_mod/fishing_thspp/sau_catch/sau_catch_db_with_rl_global.csv")
+
+```
+

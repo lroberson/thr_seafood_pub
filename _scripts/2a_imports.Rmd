@@ -1,0 +1,285 @@
+---
+title: "2a_imports"
+author: "Leslie Roberson"
+date: "3/4/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(data.table)
+
+```
+
+## Global totals
+
+Here Atlantic cod (Gadus morhua) was changed from VU to LC, as explained in the Methods
+
+```{global totals}
+
+## load trade data with value (based off SAU prices)
+
+trade_new <- fread("_data/trade_sau_prices_pub.csv")
+names(trade_new)
+
+## Check
+trade_new %>% filter(species_or_taxon == "Gadus morhua") %>% select(species_or_taxon, redlist_category) # LC
+
+## <><>>< totals VOLUME and VALUE
+
+# all commodities
+trade_new %>% 
+  summarise(tot_imports = sum(tonnage),
+            avg_imports = tot_imports/10, 
+            tot_usd = sum(imports_usd), 
+            avg_usd = tot_usd/10) 
+
+# thr species
+trade_new %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  summarise(tot_imports = sum(tonnage), 
+            avg_imports = tot_imports/10, 
+            tot_usd = sum(imports_usd), 
+            avg_usd = tot_usd/10) 
+
+# th reported importtotals with cod:
+trade_new %>% 
+  filter(redlist_category %in% c("CR","EN","VU") | species_or_taxon == "Gadus morhua") %>%
+  summarise(tot_imports = sum(tonnage), 
+            tot_usd = sum(imports_usd)) 
+
+```
+
+## Explore threatened species
+
+```{th spp by vol}
+
+unique(trade_new$redlist_category)
+trade_new$redlist_category <- fct_collapse(trade_new$redlist_category, LR = c("LR_NT","LR_LC"))
+
+#<><><><>
+
+trade_new %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  group_by(taxa_group) %>%
+  summarise(count = n_distinct(species_or_taxon)) %>%
+  ungroup()
+
+
+## top thr spp
+
+trade_new %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  group_by(species_or_taxon) %>%
+  summarise(tot_vol = sum(tonnage),
+            tot_val = sum(imports_usd)) %>%
+  #arrange(desc(tot_vol)) %>% 
+  arrange(desc(tot_val)) %>% 
+  ungroup()
+
+## totals and proportion of reported industrial th spp imports
+
+trade_new %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  summarise(imports_vol_thr = sum(tonnage), 
+            imports_val_thr = sum(imports_usd)) 
+
+thr_spp_summ <- trade_new %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  group_by(species_or_taxon, taxa_group, redlist_category, year) %>%
+  summarise(imports_spp = sum(tonnage),
+            usd_spp = sum(imports_usd)) %>%
+  rowwise() %>%
+  mutate(usd_kg = (usd_spp/imports_spp)/1000) %>%
+  ungroup() %>%
+  group_by(species_or_taxon, taxa_group, redlist_category) %>%
+  summarise(trade_spp_tot = sum(imports_spp),
+            usd_spp_tot = sum(usd_spp),
+            prop_thr_imports = trade_spp_tot/3961130*100,
+            prop_thr_usd = usd_spp_tot/7344629101*100) %>%
+  arrange(desc(prop_thr_imports)) %>%
+  #arrange(desc(prop_thr_usd)) %>%
+  ungroup()
+names(thr_spp_summ)
+
+thr_spp_summ %>% arrange(desc(prop_thr_imports))
+
+write_csv(thr_spp_summ, "_results/thr_import_spp_summ.csv")
+
+## number of importers
+
+n_importers <- trade_new %>%
+  filter(redlist_category %in% c("VU","EN","CR") | species_or_taxon == "Gadus morhua") %>%
+  group_by(species_or_taxon) %>%
+  summarise(n_importers = n_distinct(importer_name)) %>%
+  ungroup()
+
+write_csv(n_importers, "_results/thr_spp_n_importers.csv")
+  
+```
+
+## global totals by taxa
+
+```{explore taxa}
+
+## <><><>><> explore record groups
+
+## number of distinct commodity records in catch data 2006 - 2015
+n_distinct(trade_new$species_or_taxon) 
+
+## number of aggregated commodity record groups
+unique(trade_new$record_cat)
+trade_new %>% 
+  filter(record_cat == "nonspecific") %>%
+  summarise(count = n_distinct(species_or_taxon)) 
+
+## number of DD or unassessed species record groups
+trade_new %>% 
+  filter(record_cat == "spp_unknown_status") %>%
+  summarise(count = n_distinct(species_or_taxon))
+
+## number threatened species
+trade_new %>% 
+  filter(redlist_category %in% c("VU","EN","CR")) %>%
+  summarise(count = n_distinct(species_or_taxon)) 
+
+#<><><><>><
+## global imports volumes by other categories
+
+trade_sub$record_cat <- as.factor(trade_sub$record_cat)
+levels(trade_sub$record_cat)
+
+## total legal imports of non species records 
+trade_new %>% 
+  group_by(record_cat) %>%
+  summarise(tot_vol = sum(tonnage),
+            tot_val = sum(imports_usd)) %>%
+  ungroup() %>%
+  mutate(prop_vol = tot_vol/sum(tot_vol)*100,
+            prop_val = tot_val/sum(tot_val)*100)
+
+#<><><> totals by taxa 
+unique(trade_new$taxa_group) # some are misc (e.g. marine animals)
+
+trade_new %>% 
+  group_by(taxa_group) %>%
+  summarise(tot_vol = sum(tonnage),
+            tot_val = sum(imports_usd)) %>%
+  ungroup() %>%
+  mutate(prop_vol = tot_vol/sum(tot_vol)*100,
+            prop_val = tot_val/sum(tot_val)*100)
+
+## %of all reported imports that os "marine fish nei"  
+trade_new %>% 
+  group_by(species_or_taxon) %>%
+  summarise(tot_vol = sum(tonnage),
+         tot_val = sum(imports_usd)) %>%
+  ungroup() %>%
+  mutate(prop_vol = tot_vol/sum(tot_vol)*100, 
+            prop_val = tot_val/sum(tot_val)*100) %>% 
+  filter(species_or_taxon == "Marine fishes not identified") 
+
+## some invert totals
+# percent of invert imports that is not a th species (fig 1)
+trade_new %>% 
+  filter(taxa_group == "Invertebrate") %>%
+  group_by(record_cat) %>%
+  summarise(tot_vol = sum(tonnage),
+         tot_val = sum(imports_usd)) %>%
+  ungroup() %>%
+  mutate(prop_vol = tot_vol/sum(tot_vol)*100, 
+            prop_val = tot_val/sum(tot_val)*100) %>% 
+  filter(record_cat == "spp_not_th")
+
+# percent of invert imports that is a species with unknown conservation status
+trade_new %>% 
+  filter(taxa_group == "Invertebrate") %>%
+  group_by(record_cat) %>%
+  summarise(tot_vol = sum(tonnage),
+         tot_val = sum(imports_usd)) %>%
+  ungroup() %>%
+  mutate(prop_vol = tot_vol/sum(tot_vol)*100, 
+            prop_val = tot_val/sum(tot_val)*100) %>% 
+  filter(record_cat == "spp_unknown_status")
+
+# percent of invert catch that is not a species
+trade_new %>% 
+  filter(taxa_group == "Invertebrate") %>%
+  group_by(record_cat) %>%
+  summarise(tot_vol = sum(tonnage),
+         tot_val = sum(imports_usd)) %>%
+  ungroup() %>%
+  mutate(prop_vol = tot_vol/sum(tot_vol)*100, 
+            prop_val = tot_val/sum(tot_val)*100) %>% 
+  filter(record_cat == "nonspecific")
+
+```
+
+## Explore importing countries
+
+```{spp imports country}
+
+names(trade_new)
+
+## Number of thr species per country
+
+n_import_spp <- trade_new %>%
+  group_by(importer_name) %>%
+  mutate(n_spp_imports = n_distinct(species_or_taxon)) %>%
+  filter(redlist_category %in% c("CR","EN","VU")) %>%
+  group_by(importer_name, n_spp_imports) %>%
+  summarise(n_thr_spp_imports = n_distinct(species_or_taxon)) %>%
+  arrange(desc(n_thr_spp_imports)) %>%
+  ungroup()
+
+write_csv(n_import_spp, "_results/n_spp_imports_bycountry.csv")
+
+```
+
+## WMAs imports per country
+
+```{wmas country imports}
+
+names(trade_new)
+
+## catch volume and value per country
+
+wma_imports_countries <- trade_new %>% 
+  group_by(importer_name, year, record_cat) %>%
+  summarise(import_vol = sum(tonnage),
+            import_val = sum(imports_usd)) %>%
+  ungroup()
+
+wma_imports_countries <- wma_imports_countries %>%
+  complete(importer_name, nesting(year,record_cat), fill = list(import_vol = 0, import_val = 0))
+
+wma_imports_countries <- wma_imports_countries %>% 
+  group_by(importer_name, record_cat) %>%
+  mutate(import_vol_wma = pracma::movavg(import_vol, 9, "w"),
+         import_val_wma = pracma::movavg(import_val, 9, "w"))
+
+write_csv(wma_imports_countries, "_data/trade/wma_imports_countries.csv")
+
+
+## all imports totals
+
+wma_imports_countries %>%
+  filter(year == 2015) %>%
+  group_by(importer_name) %>%
+  summarise(vol_wma = sum(import_vol_wma), 
+            val_wma = sum(import_val_wma)) %>% 
+  arrange(desc(vol_wma)) %>% 
+  #arrange(desc(val_wma)) %>% 
+  ungroup()
+
+## trh imports totals
+
+wma_imports_countries %>%
+  filter(year == 2015 & record_cat == "spp_th") %>%
+  group_by(importer_name) %>%
+  #arrange(desc(import_vol_wma)) %>% 
+  arrange(desc(import_val_wma)) %>% 
+  ungroup()
+
+```

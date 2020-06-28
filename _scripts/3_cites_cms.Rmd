@@ -1,0 +1,90 @@
+---
+title: "cites"
+author: "Leslie Roberson"
+date: "3/4/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(janitor)
+library(stringr)
+library(forcats)
+
+```
+
+## Add CITES list
+
+Available for download from https://www.speciesplus.net/
+
+```{cites}
+
+cites_full <- read_csv(here("_data/cites_listings_2019_11_11.csv"))
+
+names(cites_full)
+
+cites_sub <- cites_full %>% clean_names(case = "snake") %>%
+  dplyr::select(c(class, scientific_name, listing, listed_under, full_note))
+
+## Add CITES info to threatened species catch list
+
+th_spp <- read_csv(here("_data/thr_catch_spp_plotdat.csv"))
+names(th_spp)
+
+cites_spp <- left_join(th_spp, cites_sub, by = c("taxon_sciname" = "scientific_name"))
+
+cites_spp %>% filter(!is.na(listing)) %>% distinct(taxon_sciname, listing) # 19 spp, 1 is CITES I and rest are II
+
+names(cites_spp)
+
+th_spp <- cites_spp %>%
+  dplyr::select(-c(listed_under, full_note)) %>%
+  rename(cites = listing)
+
+```
+
+## CMS
+
+Available for download from https://www.speciesplus.net/
+
+```{cms}
+
+cms_full <- read_csv("_data/cms_listings_2020_01_15.csv")
+names(cms_full)
+
+cms_sub <- cms_full %>% clean_names(case = "snake") %>%
+  dplyr::select(c(scientific_name, listing, listed_under, note))
+
+cms_sub <- cms_sub %>% 
+  rename(cms_listing = listing, 
+         cms_listed_under = listed_under, 
+         cms_note = note)
+
+## Match thr catch list
+
+names(th_spp)
+names(cms_sub)
+
+th_spp <- left_join(th_spp, cms_sub, by = c("taxon_sciname" = "scientific_name")) # 19 spp
+
+th_spp %>% filter(!is.na(cms_listing)) %>% distinct(taxon_sciname, cms_listing)
+
+names(th_spp)
+
+th_spp <- th_spp %>% 
+  select(-c(cms_note,cms_listed_under)) %>%
+  rename(cms = cms_listing)
+  
+write_csv(th_spp, "_data/th_spp_plotdat.csv")
+
+# save list of CITES & CMS listed th catch species
+
+cites_cms_spp <- th_spp %>% 
+  filter(!is.na(cms) | !is.na(cms)) %>% 
+  distinct() 
+
+write_csv(cites_cms_spp, "_results/cites_cms_catch_spp.csv")
+
+```
+

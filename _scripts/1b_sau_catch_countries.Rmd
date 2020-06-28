@@ -1,0 +1,129 @@
+---
+title: "1b_catch"
+author: "Leslie Roberson"
+date: "28/6/2020"
+output: html_document
+---
+
+## Summary
+
+Country totals for catch by volume and value 
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(data.table)
+library(pracma)
+
+```
+
+## species catch by country
+
+```{thr catch by country}
+
+sau_catch <- fread("_data/sau_catch_pub.csv")
+names(sau_catch)
+
+## some wrangling
+unique(sau_catch$redlist_category)
+sau_catch$redlist_category <- fct_collapse(sau_catch$redlist_category, LR = c("LR_NT","LR_LC"))
+
+## Number of thr species per country
+
+n_catch_spp <- sau_catch %>%
+  group_by(fishing_entity) %>%
+  mutate(n_spp_catch = n_distinct(taxon_sciname)) %>%
+  filter(redlist_category %in% c("CR","EN","VU")) %>%
+  group_by(fishing_entity, n_spp_catch) %>%
+  summarise(n_thr_spp_catch = n_distinct(taxon_sciname)) %>%
+  arrange(desc(n_thr_spp_catch)) %>%
+  ungroup()
+
+n_distinct(n_catch_spp$fishing_entity) 
+
+
+## any countries that don't catch threatened species?
+
+catch_countries <- sau_catch %>%
+  group_by(fishing_entity) %>%
+  summarise(tot_catch = sum(catch_recons)) %>%
+  ungroup()
+
+no_thr <- anti_join(catch_countries, n_catch_spp, by = "fishing_entity") 
+
+
+## means
+
+n_catch_spp %>% summarise(avg = mean(n_thr_spp_catch)) 
+
+n_catch_spp %>% 
+  filter(n_thr_spp_catch > 0) %>%
+  summarise(n = n_distinct(fishing_entity)) 
+
+write_csv(n_catch_spp, "_results/n_spp_catch_bycountry.csv")
+
+```
+
+## WMAs catch per country
+
+```{wmas country catch}
+
+library(pracma) # for weighted moving average
+
+names(sau_catch)
+
+## catch volume and value per country
+
+wma_catch_countries <- sau_catch %>% 
+  group_by(fishing_entity, year, record_cat) %>%
+  summarise(catch = sum(catch_recons),
+            value = sum(value_econom)) %>%
+  ungroup()
+
+wma_catch_countries <- wma_catch_countries %>%
+  complete(fishing_entity, nesting(year,record_cat), fill = list(catch = 0, value = 0))
+
+wma_catch_countries <- wma_catch_countries %>% 
+  group_by(fishing_entity, record_cat) %>%
+  mutate(catch_wma = pracma::movavg(catch, 8, "w"),
+         value_wma = pracma::movavg(value, 8, "w"))
+
+head(wma_catch_countries, 20)
+print(object.size(wma_catch_countries), units = "Mb") 
+
+write_csv(wma_catch_countries, "_results/wma_catch_countries.csv")
+
+```
+
+## country totals for ms
+
+for 2014 wmas
+
+```{total for ms}
+
+wmas <- read_csv("_results/wma_catch_countries.csv")
+names(wmas)
+## totals
+
+## all catch totals
+
+wmas %>%
+  filter(year == 2014) %>%
+  group_by(fishing_entity) %>%
+  summarise(vol_wma = sum(catch_wma), 
+            val_wma = sum(value_wma)) %>% 
+  arrange(desc(vol_wma)) %>% 
+  #arrange(desc(val_wma)) %>%
+  ungroup()
+
+## trh catch totals
+
+wmas %>%
+  filter(year == 2014 & record_cat == "spp_th") %>%
+  group_by(fishing_entity) %>%
+  #arrange(desc(catch_wma)) %>% 
+  arrange(desc(value_wma)) %>% 
+  ungroup()
+
+```
+

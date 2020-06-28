@@ -1,0 +1,288 @@
+---
+title: "5a_wdi_countries"
+author: "Leslie Roberson"
+date: "3/7/2020"
+output: html_document
+---
+
+## Summary
+
+Here I download WGI data and prepare it for the linear regression for threatened species catch and imports
+
+# Data source
+
+reference: http://info.worldbank.org/governance/wgi/index.aspx#home
+downloaded: 30 Sep 2019
+
+# Description:
+
+The Worldwide Governance Indicators (WGI) project reports aggregate and individual governance indicators for 215 economies over the period 1996–2017, for six dimensions of governance:
+
+Voice and Accountability
+Political Stability and Absence of Violence
+Government Effectiveness
+Regulatory Quality
+Rule of Law
+Control of Corruption
+
+Time range: 1996-2017
+
+# GDP and GDP per capita
+
+pull GDP (current USD) and GDP per capita (current USD) from the WDI database
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(WDI) # install.packages("WDI")
+library(wbstats) # install.packages("wbstats")
+library(stringr)
+
+```
+
+## specify time frame
+
+```{r time frame}
+
+# pull 10 years bc I'll select the most recent year in this timeframe for each country
+yr_start = 2005
+yr_end   = 2015
+
+```
+
+## Download each of the 6 WGI indicators
+
+```{r download WGI indicators}
+
+## get description of variables:
+indicators <-  data.frame(WDI_data[[1]])
+indicators[grep("VA.EST", indicators$indicator), ]
+indicators[grep("PV.EST", indicators$indicator), ]
+indicators[grep("GE.EST", indicators$indicator), ]
+indicators[grep("RQ.EST", indicators$indicator), ]
+indicators[grep("RL.EST", indicators$indicator), ]
+indicators[grep("CC.EST", indicators$indicator), ]
+
+# identify the six indicators
+# WDIsearch('violence')# general search
+key_voice = WDI(
+  indicator = WDIsearch('Voice and Accountability: Estimate', field='name')['indicator'],
+  country = 'all', start = yr_start, end=yr_end)
+key_voice <- key_voice %>% rename(voice = indicator)
+
+key_polst = WDI(
+  WDIsearch('Political Stability and Absence of Violence/Terrorism: Estimate', field='name')['indicator'],
+  country='all',start = yr_start, end=yr_end)
+key_polst <- key_polst %>% rename(polst = indicator)
+
+key_gvtef = WDI(
+  WDIsearch('Government Effectiveness: Estimate', field='name')['indicator'],
+  country='all',start = yr_start, end=yr_end)
+key_gvtef <- key_gvtef %>% rename(gvtef = indicator)
+
+key_regqt = WDI(
+  WDIsearch('Regulatory Quality: Estimate', field='name')['indicator'],
+  country='all',start = yr_start, end=yr_end)
+key_regqt <- key_regqt %>% rename(regqt = indicator)
+
+key_rolaw = WDI(
+  WDIsearch('Rule of Law: Estimate', field='name')['indicator'],
+  country='all',start = yr_start, end=yr_end)
+key_rolaw <- key_rolaw %>% rename(rolaw = indicator)
+
+key_corrp = WDI(
+  WDIsearch('Control of Corruption: Estimate', field='name')['indicator'],
+  country='all',start = yr_start, end=yr_end)
+key_corrp <- key_corrp %>% rename(corrp = indicator)
+
+```
+
+Combine the indicators into a single table, with a column for each indicator, and rows for each country-year pair
+
+```{r indicators combined table}
+
+d <- key_voice %>% 
+  select(country, iso2c, year, voice) %>%
+  left_join(key_polst, by=(c('country', 'iso2c','year'))) %>%
+  left_join(key_gvtef, by=(c('country', 'iso2c','year'))) %>%
+  left_join(key_regqt, by=(c('country', 'iso2c','year'))) %>%
+  left_join(key_rolaw, by=(c('country', 'iso2c','year'))) %>%
+  left_join(key_corrp, by=(c('country', 'iso2c','year'))); head(d); summary(d); sapply(d, class) 
+
+names(d)
+# check for missing years
+summary(d)
+
+```
+
+## Determine which countries have missing years
+
+```{r row has na}
+
+row.has.na <- apply(d, 1, function(x){any(is.na(x))})
+
+sum(row.has.na) 
+
+rows.na <- d[row.has.na,]
+
+```
+
+## filter dataframe for most recent year available for each country
+
+```{r filter most recent year}
+
+# For each country take most recent year that has all 6 indicators
+d_max <- d %>% 
+  drop_na() %>% 
+  group_by(country) %>%
+  top_n(1, year) %>% # take top 1 year for each country
+  ungroup()
+
+summary(d_max)
+
+duplicated(d_max$country) 
+
+```
+
+## Calculate overall WGI score for each country
+
+```{r cum WGI score}
+d_calcs  <-  d_max %>%
+  group_by(country, iso2c, year) %>%
+  rowwise() %>%
+  mutate(score_wgi_scale = mean(voice:corrp, na.rm=T)) %>%
+  ungroup()
+
+summary(d_calcs)
+
+```
+
+## Add the GDP data
+
+Also from World Bank using the WDI() package
+
+The most recent GDP data available for each country (reported in US dollars for that year) are accessed from the World Bank (data.worldbank.org/indicator/NY.GDP.MKTP.CD)
+
+```{r get GDP from WDI()}
+
+## Get GDP and GDP per capita from WDI
+
+WDIsearch('gdp.*current')
+# current GDP : "NY.GDP.MKTP.CD"      "GDP (current US$)" 
+# current GDP per capita: "NY.GDP.PCAP.CD" (US$)
+
+# GDP
+gdp_usd <- WDI(indicator = "NY.GDP.MKTP.CD", country = 'all', start = 2005, end = 2015)
+# GDP per capita
+gdp_percap_usd <- WDI(indicator = "NY.GDP.PCAP.CD", country = 'all', start = 2005, end = 2015)
+
+gdp_usd <- gdp_usd %>% rename(gdp_usd = NY.GDP.MKTP.CD) 
+gdp_percap_usd <- gdp_percap_usd %>% rename(gdp_percap_usd = NY.GDP.PCAP.CD)
+
+# check for NAs
+gdp_usd %>% filter(is.na(gdp_usd)) 
+gdp_percap_usd %>% filter(is.na(gdp_percap_usd)) 
+
+# take the 2015 or most recent gdp val for each country
+gdp_usd_max <- gdp_usd %>% 
+  drop_na() %>% # in any column
+  group_by(country) %>%
+  top_n(1, year) %>% # take top 1 year for each country
+  ungroup()
+
+gdp_percap_usd_max <- gdp_percap_usd %>% 
+  drop_na() %>% # in any column
+  group_by(country) %>%
+  top_n(1, year) %>% # take top 1 year for each country
+  ungroup()
+
+summary(gdp_max) 
+
+gdp_usd_max <- gdp_usd_max %>% arrange(country) %>% unique()
+gdp_percap_usd_max <- gdp_percap_usd_max %>% arrange(country) %>% unique()
+
+names(gdp_usd_max)
+names(gdp_percap_usd_max)
+
+gdp_max <- full_join(gdp_usd_max, gdp_percap_usd_max, by = c("iso2c","country","year"))
+
+```
+
+## remove all the aggregated regional values
+
+```{r remove regions}
+
+wb_countries <- wbcountries()
+names(wb_countries)
+
+gdp_max <- merge(gdp_max, y = wb_countries[c("iso2c","region","country")], by = "iso2c", all.x = TRUE)
+
+gdp_max <- filter(gdp_max, region != "Aggregates")
+
+summary(gdp_max) # 210 countries
+
+gdp_max <- gdp_max %>% select(-country.y) %>% rename(country = country.x, year_gdp = year)
+
+```
+
+## join GDP to WDI indicators
+
+```{r join gdp to WDI}
+
+names(d_calcs)
+names(gdp_max)
+
+wdi_dat <- full_join(d_calcs, gdp_max, by = c("iso2c", "country"))
+
+summary(wdi_dat)
+
+```
+
+## Get total population data from WDI
+
+```{r WDI population}
+
+# search avaialble data
+WDIsearch(string = "population", field = "name", short = TRUE, cache = NULL)
+
+WDIsearch('population.*total')
+
+# population
+population <- WDI(indicator = "SP.POP.TOTL", country = 'all', start = 2005, end = 2015)
+head(population)
+
+population <- population %>% rename(pop = SP.POP.TOTL) 
+
+population <- population %>% filter(country != "Not classified")
+names(population)
+
+population_max <- population %>% 
+  drop_na() %>% # in any column
+  group_by(country) %>%
+  top_n(1, year) %>% # take top 1 year for each country
+  ungroup()
+
+names(population_max)
+population_max <- population_max %>% rename(year_pop = year)
+population_max %>% filter(is.na(pop)) 
+
+```
+
+## Add population data to the wdi data
+
+```{add population}
+
+names(wdi_dat)
+names(population_max)
+
+wdi_dat <- full_join(wdi_dat, population_max, by = c("iso2c", "country"))
+
+wdi_dat %>% filter(is.na(pop)) # n = 9 countries
+
+## save
+
+write_csv(wdi_dat, "_data/countries_wdi.csv")
+
+```
+

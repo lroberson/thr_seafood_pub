@@ -1,0 +1,111 @@
+---
+title: "5_RAM_stock_db"
+output: html_document
+---
+
+## Summary
+
+Here I explore the RAM stock legacy database as a possible list/indicator of whether a species is "commercially targeted"
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(readxl)
+
+```
+
+## Search for matches in th spp catch list 
+
+Downloaded from: https://zenodo.org/record/3676088#.Xp0WbVMzZPM
+version 4.491
+
+```{match thr catch list}
+
+## load RAM stock list
+
+stock_list <- read_csv("_data/ram_stock_list.csv")
+names(stock_list)
+
+#<><><><>
+## catch commodities
+
+catch_list <- read_csv("_results/thr_catch_spp_summ.csv")
+
+names(catch_list)
+n_distinct(catch_list$taxon_sciname) # n = 91, cod excluded
+
+## match with ram stock list by full scientific name
+
+ram_full_matches <- left_join(catch_list, stock_list, by = c("taxon_sciname" = "scientificname")) %>%
+  rename(ram_commonname = commonname)
+
+## Keep only full name matches 
+write_csv(ram_full_matches, "_results/ram_full_matches.csv")
+
+## add binary col to thr catch list 
+
+catch_list <- left_join(catch_list, stock_list, by = c("taxon_sciname" = "scientificname")) %>%
+  rename(ram_commonname = commonname) %>%
+  mutate(ram_yn = ifelse(!is.na(ram_commonname), "y", "n")) %>%
+  dplyr::select(-c(ram_commonname, stockid, taxGroup))
+
+## save
+write_csv(catch_list, "_data/thr_catch_spp_plotdat.csv")
+
+```
+
+## Total catch volume of "targeted" species 
+
+```{total catch vol targeted spp}
+
+## RAM listed species
+catch_list <- read_csv("_data/th_spp_plotdat.csv")
+
+names(catch_list)
+nrow(catch_list) # n = 91, cod excluded here
+
+catch_list %>% summarise(tot = sum(catch_spp_tot)) 
+
+catch_list %>%
+  filter(ram_yn == "y") %>%
+  summarise(tot = sum(catch_spp_tot)) 
+
+ram_list <- catch_list %>% filter(ram_yn == "y") %>% select(taxon_sciname)
+
+nrow(ram_list) 
+
+
+## compare RAM listed spp to rl threats results
+
+rl_threats <- read_csv("_results/tables/spp_threatcodes_summ.csv")
+
+head(rl_threats)
+
+# get species with threat code 1 (intentional large scale fishing)
+iucn_list <- rl_threats %>% 
+  mutate(first = stri_extract_first(threat_codes, regex = "\\d{1}")) %>% # extract first digit
+  filter(first == 1)
+
+iucn_only <- anti_join(iucn_list, ram_list, by = c("friendly_name" = "taxon_sciname")) %>%
+  select(friendly_name) %>%
+  rename(taxon_sciname = friendly_name)
+
+## get catch proportion of all these species 
+
+full_list <- bind_rows(ram_list, iucn_only)
+
+full_vec <- full_list %>% pull(taxon_sciname)
+
+length(full_vec) # n = 73
+
+catch_list %>%
+  filter(taxon_sciname %in% full_vec | 
+           taxon_sciname %in% c("Merluccius senegalensis", "Kajikia albida", "Epinephelus striatus", "Apostichopus japonicus")) %>% # also the 4 species not in RAM but traded internationally
+  summarise(n_spp = n_distinct(taxon_sciname), # n = 73 -> imported spp are in the iucn list
+              tot = sum(catch_spp_tot)) 
+
+catch_list %>% summarise(tot = sum(usd_spp_tot)) 
+
+
+```
+
