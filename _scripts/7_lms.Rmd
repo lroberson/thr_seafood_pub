@@ -7,7 +7,7 @@ output: html_document
 
 ## Summary
 
-Here I explore correlations between different variables for the countries:
+explore correlations between different variables for the countries:
 
 Does a higher proportion of th species CATCH correlate with a higher percentage of species level records?
 
@@ -17,7 +17,6 @@ vol th spp legal catch ~ vol IUU catch
                   + vol all other spp level import records (not threatened and unknown stats)
                   + vol nonspecific records
                   + region
-                  # regions are pretty coarse and probs not significant 
                   + country governance score (WGI)
                   + GDP per capita (current usd) - better indication of wealth than GDP
                   + population
@@ -28,166 +27,71 @@ library(tidyverse)
 
 ```
 
-## Make dfs for lms
-
-need each record cat to be a factor 
+## catch
 
 ```{r}
 
-## catch 
-
-wma_catch <- read_csv("_data/sau_catch/wma_catch_countries.csv")
-
-names(wma_catch)
-unique(wma_catch$year)
-
-catch_wide <- wma_catch %>% 
-  filter(year == 2014) %>%
-  select(-c(year, catch, value, value_wma))
-
-head(catch_wide)
-
-catch_wide <- catch_wide %>% pivot_wider(names_from = record_cat, 
-                                     values_from = catch_wma, 
-                                     values_fill = list(catch_wma=0))
-head(catch_wide)
-
-write_csv(catch_wide, "_data/sau_catch/lms_catch_dat.csv")
-
-## trade
-
-wma_trade <- read_csv("_data/trade/wma_imports_countries.csv")
-
-names(wma_trade)
-unique(wma_trade$year)
-
-trade_wide <- wma_trade %>% 
-  filter(year == 2015) %>%
-  select(-c(year, import_vol, import_val, import_val_wma))
-
-head(trade_wide)
-
-trade_wide <- trade_wide %>% pivot_wider(names_from = record_cat, 
-                                     values_from = import_vol_wma, 
-                                     values_fill = list(import_vol_wma=0))
-head(trade_wide)
-
-write_csv(trade_wide, "_data/trade/lms_imports_dat.csv")
-
-```
-
-## Match to wdi data
-
-cleaned and missing countries filled manually
-
-```{r}
-
-wdi_dat <- read_csv("_data/countries_lookup_wdi.csv")
-names(wdi_dat)
-
-```
-
-## lm catch
-
-```{r}
-
-catch_wide <- read_csv("_data/sau_catch/lms_catch_dat.csv")
-names(catch_wide)
-
-catch_lms_dat <- wdi_dat %>%
-  select(-c(year, year_gdp, year_pop)) %>%
-  left_join(catch_wide, wdi_dat, by = "fishing_entity") %>%
-  filter(!is.na(fishing_entity)) %>% 
-  replace_na(list(aggregated = 0, spp_not_th = 0, spp_th = 0, spp_unknown_status = 0))# 163 fishing countries
-
-catch_lms_dat_sub <- catch_lms_dat %>%
-  rowwise() %>%
-  mutate(tot_vol = sum(aggregated, spp_not_th, spp_th, spp_unknown_status),
-         all_spp = sum(spp_unknown_status, spp_not_th, spp_th)) 
-
-catch_lms_dat_sub %>% filter(aggregated == 0)
-
-## replace 0s with tiny value to calc ratio
-catch_lms_dat_sub <- catch_lms_dat_sub %>% 
-  mutate(aggregated = case_when(
-    aggregated == 0 ~ 0.000001,
-    TRUE ~ aggregated))
-
-catch_lms_dat_sub <- catch_lms_dat_sub %>%
-  rowwise() %>%
-  mutate(ratio = all_spp/aggregated) 
-
-names(catch_lms_dat_sub)
-str(catch_lms_dat_sub)
-catch_lms_dat_sub$pop <- as.numeric(catch_lms_dat_sub$pop)
-catch_lms_dat_sub$gdp_percap_usd <- as.numeric(catch_lms_dat_sub$gdp_percap_usd)
-summary(catch_lms_dat_sub)
-
-write_csv(catch_lms_dat_sub, "_data/sau_catch/lms_catch_dat_sub.csv")
-
+## load data
+catch <- read_csv("_data/lms_catch_dat.csv")
+names(catch)
 
 ## LINEAR REGRESSIONS
-lm_0 <- lm(spp_th ~ tot_vol, # sig
-                 data = catch_lms_dat_sub)
+lm_0 <- lm(spp_th ~ tot_vol, 
+                 data = catch)
 summary(lm_0)
 
-lm_1 <- lm(spp_th ~ tot_vol + # sig (pos correlation)
-             aggregated, # sig (neg correlation)
-                 data = catch_lms_dat_sub)
+lm_1 <- lm(spp_th ~ tot_vol + 
+             aggregated, 
+                 data = catch)
 summary(lm_1)
 
-lm_2 <- lm(spp_th ~ tot_vol + # sig
-             aggregated + # sig
-             pop, # not sig
-                 data = catch_lms_dat_sub)
+lm_2 <- lm(spp_th ~ tot_vol + 
+             aggregated + 
+             pop, 
+                 data = catch)
 summary(lm_2)
 
-lm_3 <- lm(spp_th ~ tot_vol + # sig
-             aggregated + # sig
-             score_wgi_scale, # not sig
-                 data = catch_lms_dat_sub)
+lm_3 <- lm(spp_th ~ tot_vol + 
+             aggregated + 
+             score_wgi_scale, 
+                 data = catch)
 summary(lm_3)
 
-lm_4 <- lm(spp_th ~ tot_vol + # sig
-             aggregated + # sig
-             gdp_usd, # p = 0.08
-                 data = catch_lms_dat_sub)
+lm_4 <- lm(spp_th ~ tot_vol + 
+             aggregated + 
+             gdp_usd, 
+                 data = catch)
 summary(lm_4)
 
-lm_5 <- lm(spp_th ~ tot_vol + # sig (+)
-             aggregated + # sig (-)
-             gdp_percap_usd, # (+)
-                 data = catch_lms_dat_sub)
+lm_5 <- lm(spp_th ~ tot_vol + 
+             aggregated + 
+             gdp_percap_usd, 
+                 data = catch)
 summary(lm_5)
 
-lm_6 <- lm(spp_th ~ spp_not_th + # not sig
-             spp_unknown_status + # sig (+)
-             aggregated + # sig (-)
-             gdp_percap_usd, # (+)
-                 data = catch_lms_dat_sub)
+lm_6 <- lm(spp_th ~ spp_not_th + 
+             spp_unknown_status + 
+             aggregated + 
+             gdp_percap_usd, 
+                 data = catch)
 summary(lm_6)
 
-lm_7 <- lm(spp_th ~ ratio, # not sig
-                 data = catch_lms_dat_sub)
+lm_7 <- lm(spp_th ~ ratio,
+                 data = catch)
 summary(lm_7)
 
-lm_8 <- lm(spp_th ~ tot_vol + # sig
-             ratio, # not sig
-                 data = catch_lms_dat_sub)
+lm_8 <- lm(spp_th ~ tot_vol + 
+             ratio, 
+                 data = catch)
 summary(lm_8)
 
-lm_9 <- lm(spp_th ~ tot_vol + # sig (+)
-             gdp_percap_usd, # sig (+)
-                 data = catch_lms_dat_sub)
-summary(lm_9) # lower adj R2 than lm_5
-
+lm_9 <- lm(spp_th ~ tot_vol + 
+             gdp_percap_usd, 
+                 data = catch)
+summary(lm_9) 
 
 ## ANOVA best model fit
-
-catch_lms_dat_sub %>% filter(is.na(pop))
-catch_lms_dat_sub %>% filter(is.na(gdp_percap_usd))
-
-catch_lms_dat_sub_best <- catch_lms_dat_sub %>%
+catch_best <- catch %>%
   filter(!is.na(pop)) %>%
   filter(!is.na(gdp_percap_usd)) 
 
@@ -195,128 +99,88 @@ lm_best <- lm(spp_th ~ tot_vol +
                 aggregated +
                 gdp_percap_usd, 
               data = catch_lms_dat_sub_best)
-
-out1 <- summary(lm_best) # can't coerce to df have to copy manually
-out2 <- as.data.frame(anova(lm_best))
-
-# other useful outputs
 plot(lm_best)
-out3 <- as.data.frame(coefficients(lm_best)) # model coefficients
 
-out4 <- as.data.frame(confint(lm_best, level=0.95)) # CIs for model parameters
-fitted(lm_best) # predicted values
+out1 <- summary(lm_best) 
+out2 <- as.data.frame(anova(lm_best))
+out3 <- as.data.frame(coefficients(lm_best)) 
 
-vcov(lm_best) # covariance matrix for model parameters
-influence(lm_best) # regression diagnostics
+out4 <- as.data.frame(confint(lm_best, level=0.95)) 
+fitted(lm_best) 
+vcov(lm_best) 
+influence(lm_best) 
   
 ```
 
-## lm trade
+## imports
 
 ```{r}
 
-trade_wide <- read_csv("_data/trade/lms_imports_dat.csv")
-names(trade_wide)
-
-trade_wide <- trade_wide %>% rename(aggregated = nonspecific)
-
-names(wdi_dat)
-
-trade_lms_dat <- wdi_dat %>%
-  select(-c(year, year_gdp, year_pop)) %>%
-  left_join(trade_wide, wdi_dat, by = "importer_name") %>%
-  filter(!is.na(importer_name)) %>% 
-  replace_na(list(aggregated = 0, spp_not_th = 0, spp_th = 0, spp_unknown_status = 0))
-
-trade_lms_dat_sub <- trade_lms_dat %>%
-  rowwise() %>%
-  mutate(tot_vol = sum(aggregated, spp_not_th, spp_th, spp_unknown_status),
-         all_spp = sum(spp_unknown_status, spp_not_th, spp_th)) 
-
-trade_lms_dat_sub %>% filter(aggregated == 0) # just other nei - remove
-trade_lms_dat_sub <- trade_lms_dat_sub %>% filter(aggregated > 0)
-
-trade_lms_dat_sub <- trade_lms_dat_sub %>%
-  rowwise() %>%
-  mutate(ratio = all_spp/aggregated) 
-
-names(trade_lms_dat_sub)
-str(trade_lms_dat_sub)
-trade_lms_dat_sub$pop <- as.numeric(trade_lms_dat_sub$pop)
-trade_lms_dat_sub$gdp_percap_usd <- as.numeric(trade_lms_dat_sub$gdp_percap_usd)
-
-write_csv(trade_lms_dat_sub, "_data/trade/lms_imports_dat_sub.csv")
-
+imports <- read_csv("_data/lms_imports_dat.csv")
+names(imports)
 
 ## LINEAR REGRESSIONS
-lm_0 <- lm(spp_th ~ tot_vol, # sig
-                 data = trade_lms_dat_sub)
+lm_0 <- lm(spp_th ~ tot_vol, 
+                 data = imports)
 summary(lm_0)
 
-lm_1 <- lm(spp_th ~ tot_vol + # sig (pos correlation)
-             aggregated, # sig (neg correlation)
-                 data = trade_lms_dat_sub)
+lm_1 <- lm(spp_th ~ tot_vol + 
+             aggregated, 
+                 data = imports)
 summary(lm_1)
 
-lm_2 <- lm(spp_th ~ tot_vol + # sig
-             aggregated + # sig
-             pop, # not sig
-                 data = trade_lms_dat_sub)
+lm_2 <- lm(spp_th ~ tot_vol + 
+             aggregated + 
+             pop, 
+                 data = imports)
 summary(lm_2)
 
-lm_3 <- lm(spp_th ~ tot_vol + # sig
-             aggregated + # sig
-             score_wgi_scale, # not sig
-                 data = trade_lms_dat_sub)
+lm_3 <- lm(spp_th ~ tot_vol + 
+             aggregated + 
+             score_wgi_scale, 
+                 data = imports)
 summary(lm_3)
 
-lm_4 <- lm(spp_th ~ tot_vol + # sig
-             aggregated + # sig
-             gdp_usd, # pnot sig
-                 data = trade_lms_dat_sub)
+lm_4 <- lm(spp_th ~ tot_vol + 
+             aggregated + 
+             gdp_usd, 
+                 data = imports)
 summary(lm_4)
 
-lm_5 <- lm(spp_th ~ tot_vol + # sig (+)
-             aggregated + # sig (-)
-             gdp_percap_usd, # not sig
-                 data = trade_lms_dat_sub)
+lm_5 <- lm(spp_th ~ tot_vol + 
+             aggregated + 
+             gdp_percap_usd, 
+                 data = imports)
 summary(lm_5)
 
-lm_6 <- lm(spp_th ~ spp_not_th + # sig
+lm_6 <- lm(spp_th ~ spp_not_th + 
              spp_unknown_status + 
-             aggregated + # sig (-)
+             aggregated + 
              gdp_percap_usd, 
-                 data = trade_lms_dat_sub)
+                 data = imports)
 summary(lm_6)
 
-lm_7 <- lm(spp_th ~ ratio, # not sig
-                 data = trade_lms_dat_sub)
+lm_7 <- lm(spp_th ~ ratio, 
+                 data = imports)
 summary(lm_7)
 
-lm_8 <- lm(spp_th ~ tot_vol + # sig
-             ratio, # sig
-                 data = trade_lms_dat_sub)
-summary(lm_8) # but lower adjusted R2 than lm_1
+lm_8 <- lm(spp_th ~ tot_vol + 
+             ratio, 
+                 data = imports)
+summary(lm_8) 
 
-
-## ANOVA best model fit
-
+## ANOVA
 lm_best <- lm(spp_th ~ tot_vol + 
                 aggregated,
-                 data = trade_lms_dat_sub)
-
-out1 <- summary(lm_best) # can't coerce to df have to copy manually
-out2 <- as.data.frame(anova(lm_best))
-
-# other useful outputs
+                 data = imports)
 plot(lm_best)
-out3 <- as.data.frame(coefficients(lm_best)) # model coefficients
-
-out4 <- as.data.frame(confint(lm_best, level=0.95)) # CIs for model parameters
-fitted(lm_best) # predicted values
-
-vcov(lm_best) # covariance matrix for model parameters
-influence(lm_best) # regression diagnostics
+out1 <- summary(lm_best) 
+out2 <- as.data.frame(anova(lm_best))
+out3 <- as.data.frame(coefficients(lm_best)) 
+out4 <- as.data.frame(confint(lm_best, level=0.95))
+fitted(lm_best) 
+vcov(lm_best) 
+influence(lm_best)
 
 ```
 
