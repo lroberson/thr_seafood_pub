@@ -19,6 +19,8 @@ library(readxl)
 Downloaded from: https://zenodo.org/record/3676088#.Xp0WbVMzZPM
 version 4.491
 
+Stock list was created by selecting species names listed in version 4.491 of the RAM database
+
 ```{match thr catch list}
 
 ## load RAM stock list

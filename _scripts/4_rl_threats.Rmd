@@ -7,7 +7,7 @@ output: html_document
 
 ## Summary
 
-RL threats codes and supplementary info, provided by Beth Polidoro at IUCN
+explore IUCN threats data for threatened catch species 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -20,6 +20,8 @@ library(readxl)
 ```
 
 ## cleaned data
+
+RL threats codes and supplementary info, provided by Beth Polidoro at IUCN
 
 ```{load cleaned data}
 

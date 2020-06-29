@@ -14,14 +14,26 @@ library(data.table)
 
 ## Global totals
 
-Here Atlantic cod (Gadus morhua) was changed from VU to LC, as explained in the Methods
+This database is described in Watson, R. A., Green, B. S., Tracey, S. R., Farmery, A. & Pitcher, T. J. Provenance of global seafood. Fish Fish. 17, 585–595 (2016).
+
+Here we provide the following variables:
+year
+importer name (importing country)
+species or taxon 
+common name
+taxa group (teleost, chondrichthyan, invertebrate, other)
+redlist category
+record cat (4 record categories: aggregated record, species level not threatened, species level threatened, species level unknown or data deficient status)
+tonnage (import tonnage)
+value usd (import value in USD, derived from SAU exvessel prices: value = tonnage*price)
+*Red List category (from version 2019.2)
+
+Here the redlist category for Atlantic cod (Gadus morhua) was changed from VU to LC, as explained in the Methods
 
 ```{global totals}
 
 ## load trade data with value (based off SAU prices)
-
 trade_new <- fread("_data/trade_sau_prices_pub.csv")
-names(trade_new)
 
 ## Check
 trade_new %>% filter(species_or_taxon == "Gadus morhua") %>% select(species_or_taxon, redlist_category) # LC
@@ -32,7 +44,7 @@ trade_new %>% filter(species_or_taxon == "Gadus morhua") %>% select(species_or_t
 trade_new %>% 
   summarise(tot_imports = sum(tonnage),
             avg_imports = tot_imports/10, 
-            tot_usd = sum(imports_usd), 
+            tot_usd = sum(value_usd), 
             avg_usd = tot_usd/10) 
 
 # thr species
@@ -40,14 +52,14 @@ trade_new %>%
   filter(redlist_category %in% c("VU","EN","CR")) %>%
   summarise(tot_imports = sum(tonnage), 
             avg_imports = tot_imports/10, 
-            tot_usd = sum(imports_usd), 
+            tot_usd = sum(value_usd), 
             avg_usd = tot_usd/10) 
 
 # th reported importtotals with cod:
 trade_new %>% 
   filter(redlist_category %in% c("CR","EN","VU") | species_or_taxon == "Gadus morhua") %>%
   summarise(tot_imports = sum(tonnage), 
-            tot_usd = sum(imports_usd)) 
+            tot_usd = sum(value_usd)) 
 
 ```
 
@@ -73,7 +85,7 @@ trade_new %>%
   filter(redlist_category %in% c("VU","EN","CR")) %>%
   group_by(species_or_taxon) %>%
   summarise(tot_vol = sum(tonnage),
-            tot_val = sum(imports_usd)) %>%
+            tot_val = sum(value_usd)) %>%
   #arrange(desc(tot_vol)) %>% 
   arrange(desc(tot_val)) %>% 
   ungroup()
@@ -83,13 +95,13 @@ trade_new %>%
 trade_new %>% 
   filter(redlist_category %in% c("VU","EN","CR")) %>%
   summarise(imports_vol_thr = sum(tonnage), 
-            imports_val_thr = sum(imports_usd)) 
+            imports_val_thr = sum(value_usd)) 
 
 thr_spp_summ <- trade_new %>% 
   filter(redlist_category %in% c("VU","EN","CR")) %>%
   group_by(species_or_taxon, taxa_group, redlist_category, year) %>%
   summarise(imports_spp = sum(tonnage),
-            usd_spp = sum(imports_usd)) %>%
+            usd_spp = sum(value_usd)) %>%
   rowwise() %>%
   mutate(usd_kg = (usd_spp/imports_spp)/1000) %>%
   ungroup() %>%
@@ -154,7 +166,7 @@ levels(trade_sub$record_cat)
 trade_new %>% 
   group_by(record_cat) %>%
   summarise(tot_vol = sum(tonnage),
-            tot_val = sum(imports_usd)) %>%
+            tot_val = sum(value_usd)) %>%
   ungroup() %>%
   mutate(prop_vol = tot_vol/sum(tot_vol)*100,
             prop_val = tot_val/sum(tot_val)*100)
@@ -165,7 +177,7 @@ unique(trade_new$taxa_group) # some are misc (e.g. marine animals)
 trade_new %>% 
   group_by(taxa_group) %>%
   summarise(tot_vol = sum(tonnage),
-            tot_val = sum(imports_usd)) %>%
+            tot_val = sum(value_usd)) %>%
   ungroup() %>%
   mutate(prop_vol = tot_vol/sum(tot_vol)*100,
             prop_val = tot_val/sum(tot_val)*100)
@@ -174,7 +186,7 @@ trade_new %>%
 trade_new %>% 
   group_by(species_or_taxon) %>%
   summarise(tot_vol = sum(tonnage),
-         tot_val = sum(imports_usd)) %>%
+         tot_val = sum(value_usd)) %>%
   ungroup() %>%
   mutate(prop_vol = tot_vol/sum(tot_vol)*100, 
             prop_val = tot_val/sum(tot_val)*100) %>% 
@@ -186,7 +198,7 @@ trade_new %>%
   filter(taxa_group == "Invertebrate") %>%
   group_by(record_cat) %>%
   summarise(tot_vol = sum(tonnage),
-         tot_val = sum(imports_usd)) %>%
+         tot_val = sum(value_usd)) %>%
   ungroup() %>%
   mutate(prop_vol = tot_vol/sum(tot_vol)*100, 
             prop_val = tot_val/sum(tot_val)*100) %>% 
@@ -197,7 +209,7 @@ trade_new %>%
   filter(taxa_group == "Invertebrate") %>%
   group_by(record_cat) %>%
   summarise(tot_vol = sum(tonnage),
-         tot_val = sum(imports_usd)) %>%
+         tot_val = sum(value_usd)) %>%
   ungroup() %>%
   mutate(prop_vol = tot_vol/sum(tot_vol)*100, 
             prop_val = tot_val/sum(tot_val)*100) %>% 
@@ -208,7 +220,7 @@ trade_new %>%
   filter(taxa_group == "Invertebrate") %>%
   group_by(record_cat) %>%
   summarise(tot_vol = sum(tonnage),
-         tot_val = sum(imports_usd)) %>%
+         tot_val = sum(value_usd)) %>%
   ungroup() %>%
   mutate(prop_vol = tot_vol/sum(tot_vol)*100, 
             prop_val = tot_val/sum(tot_val)*100) %>% 
@@ -248,7 +260,7 @@ names(trade_new)
 wma_imports_countries <- trade_new %>% 
   group_by(importer_name, year, record_cat) %>%
   summarise(import_vol = sum(tonnage),
-            import_val = sum(imports_usd)) %>%
+            import_val = sum(value_usd)) %>%
   ungroup()
 
 wma_imports_countries <- wma_imports_countries %>%

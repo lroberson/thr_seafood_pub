@@ -19,6 +19,16 @@ library(pracma)
 
 ## species catch by country
 
+SAU data is available upon request from seaaroundus.org
+
+The provided subset contains:
+
+catch tonnage and value by country and taxon
+years: 2006 - 2014
+fishing sector: industrial
+reporting type: reported
+*Red List category (from version 2019.2)
+
 ```{thr catch by country}
 
 sau_catch <- fread("_data/sau_catch_pub.csv")
