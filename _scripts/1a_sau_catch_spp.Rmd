@@ -37,7 +37,12 @@ Here Atlantic cod (Gadus morhua) was changed from VU to LC, as explained in the 
 sau_catch <- read_csv("_data/sau_catch_pub.csv")
 names(sau_catch)
 
+## check for species to modify/exclude (freshwater whitefish - Coregonus lavaretus)
 sau_catch %>% filter(taxon_sciname == "Gadus morhua") %>% select(taxon_sciname, redlist_category) # LC
+
+sau_catch %>% filter(taxon_sciname == "Coregonus lavaretus") %>% select(taxon_sciname, redlist_category) # none
+
+sau_catch[grep("Coregonus", sau_catch$taxon_sciname), ] %>% distinct(taxon_sciname) # only Coregonus and Coregonus albula
 
 ## <><>>< totals VOLUME and VALUE
 
